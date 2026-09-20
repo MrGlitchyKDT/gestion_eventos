@@ -1,5 +1,7 @@
 <?php 
 // views/admin/dashboard.php
+require_once __DIR__ . '/../../helpers/AuthHelper.php';
+AuthHelper::requerirRol(['ADMINISTRADOR']);
 $titulo_pagina = "Panel Administrativo — UAB Eventos";
 $seccion_activa = "dashboard";
 require_once __DIR__ . '/../layouts/header.php';

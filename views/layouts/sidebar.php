@@ -2,7 +2,7 @@
 // views/layouts/sidebar.php
 require_once __DIR__ . '/../../helpers/AuthHelper.php';
 $usuarioActual = AuthHelper::obtenerUsuario();
-$rol = $usuarioActual['rol_nombre'] ?? 'PARTICIPANTE';
+$rol = AuthHelper::obtenerRol() ?? '';
 $seccionActiva = $seccion_activa ?? '';
 ?>
 
@@ -28,7 +28,7 @@ $seccionActiva = $seccion_activa ?? '';
   <!-- Perfil resumido -->
   <div class="d-flex align-items-center gap-2 pb-2 mb-2 border-bottom">
     <div class="user-avatar-sm">
-      <?= strtoupper(substr($usuarioActual['nombres'] ?? 'U', 0, 1)) ?>
+      <?= htmlspecialchars(mb_strtoupper(mb_substr($usuarioActual['nombres'] ?? 'U', 0, 1))) ?>
     </div>
     <div class="lh-sm text-truncate">
       <div class="fw-bold text-dark small text-truncate" title="<?= htmlspecialchars(($usuarioActual['nombres'] ?? '') . ' ' . ($usuarioActual['apellidos'] ?? '')) ?>">
@@ -58,11 +58,12 @@ $seccionActiva = $seccion_activa ?? '';
       <hr class="my-1 text-muted">
     <?php elseif ($rol === 'EXPOSITOR'): ?>
       <a class="nav-link nav-link-compact <?= ($seccionActiva === 'mis_eventos') ? 'active' : '' ?>" href="index.php?action=expositor_eventos">
-        <i class="bi bi-clipboard-check me-2"></i> Mis Clases
+        <i class="bi bi-clipboard-check me-2"></i> Mis Eventos
       </a>
       <hr class="my-1 text-muted">
     <?php endif; ?>
 
+    <?php if (in_array($rol, ['PARTICIPANTE', 'ADMINISTRADOR'], true)): ?>
     <a class="nav-link nav-link-compact <?= ($seccionActiva === 'dashboard_participante') ? 'active' : '' ?>" href="index.php?action=participante_dashboard">
       <i class="bi bi-compass me-2"></i> Explorar Eventos
     </a>
@@ -72,12 +73,16 @@ $seccionActiva = $seccion_activa ?? '';
     <a class="nav-link nav-link-compact <?= ($seccionActiva === 'mis_certificados') ? 'active' : '' ?>" href="index.php?action=mis_certificados">
       <i class="bi bi-award me-2"></i> Mis Certificados
     </a>
+    <?php endif; ?>
     <a class="nav-link nav-link-compact <?= ($seccionActiva === 'perfil') ? 'active' : '' ?>" href="index.php?action=perfil">
       <i class="bi bi-person me-2"></i> Mi Perfil
     </a>
     <hr class="my-1 text-muted">
-    <a class="nav-link nav-link-compact text-danger" href="index.php?action=logout">
-      <i class="bi bi-box-arrow-right me-2"></i> Cerrar Sesión
-    </a>
+    <form action="index.php?action=logout" method="POST" class="m-0">
+      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(AuthHelper::tokenCsrf()) ?>">
+      <button type="submit" class="nav-link nav-link-compact text-danger border-0 bg-transparent text-start w-100">
+        <i class="bi bi-box-arrow-right me-2"></i> Cerrar Sesión
+      </button>
+    </form>
   </nav>
 </div>

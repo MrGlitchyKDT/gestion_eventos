@@ -28,6 +28,38 @@ Plataforma web integral para la administración, control de cupos en tiempo real
 
 ---
 
+## Inicio de sesión y acceso por rol
+
+El formulario de acceso está en `public/index.php?action=login`. En XAMPP, con Apache y MySQL iniciados, se puede abrir en `http://localhost/gestion_eventos/public/index.php?action=login`.
+
+La autenticación consulta `usuarios` y `roles` mediante PDO, valida la contraseña con `password_verify()` y requiere una cuenta activa. El destino se define por el nombre del rol en `AuthHelper`, sin depender de sus identificadores numéricos:
+
+| Rol | Acción de destino | Módulo inicial |
+| :--- | :--- | :--- |
+| `ADMINISTRADOR` | `admin_dashboard` | Resumen administrativo |
+| `EXPOSITOR` | `expositor_eventos` | Eventos asignados al expositor |
+| `PARTICIPANTE` | `participante_dashboard` | Convocatorias abiertas e inscripciones |
+
+* Las cuentas con roles no reconocidos no pueden iniciar sesión.
+* Una sesión vigente vuelve a su módulo al abrir la raíz del sistema o las pantallas de acceso y registro.
+* El estado y el rol se consultan nuevamente en cada petición al controlador frontal: la desactivación revoca el acceso y los cambios de rol actualizan los permisos.
+* Los controladores verifican los roles permitidos. El administrador conserva el acceso adicional a las áreas de participante y expositor; estos dos roles no acceden al panel administrativo ni al área privada del otro.
+* El registro público asigna exclusivamente `PARTICIPANTE`, resuelto desde la tabla `roles`, y verifica la confirmación de contraseña.
+* Inicio de sesión, registro y cierre de sesión usan formularios POST con token CSRF. Para salir se utiliza el botón **Cerrar Sesión** del menú lateral.
+* PHP requiere las extensiones `pdo_mysql` y `mbstring`. La conexión se configura en `config/Database.php`; este cambio no crea cuentas ni modifica las credenciales existentes.
+
+### Pruebas de autenticación
+
+Desde la carpeta `gestion_eventos`, con MySQL iniciado:
+
+```powershell
+python tests/auth_http.py --php C:/xampp/php/php.exe
+```
+
+La suite usa Python estándar y un servidor PHP local temporal. Comprueba los tres roles, permisos, credenciales inválidas, CSRF, cierre de sesión, registro y cambios de rol o estado durante una sesión. Requiere permiso para crear tablas temporales en la base configurada; utiliza cuentas sintéticas y una transacción de solo lectura para las tablas permanentes. Las sesiones y los datos de prueba se eliminan al terminar.
+
+---
+
 ## Estructura del Repositorio
 
 ```text

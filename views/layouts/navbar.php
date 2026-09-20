@@ -2,6 +2,7 @@
 // views/layouts/navbar.php
 require_once __DIR__ . '/../../helpers/AuthHelper.php';
 AuthHelper::initSession();
+$usuarioNav = AuthHelper::obtenerUsuario();
 ?>
 <nav class="navbar navbar-expand-lg navbar-dark border-bottom border-secondary border-opacity-25 shadow-sm sticky-top py-2" style="background-color: #0b0f19 !important;">
   <div class="container-fluid px-3 px-md-4 px-xl-5">
@@ -22,6 +23,19 @@ AuthHelper::initSession();
     <!-- Enlaces posicionados al extremo derecho -->
     <div class="collapse navbar-collapse" id="navbarMain">
       <ul class="navbar-nav ms-auto align-items-lg-center gap-1 gap-lg-2 mt-2 mt-lg-0">
+        <?php if ($usuarioNav): ?>
+        <li class="nav-item">
+          <a class="nav-link text-white fw-semibold px-2 py-1 rounded" href="index.php?action=<?= htmlspecialchars(AuthHelper::obtenerRutaInicio()) ?>">
+            <i class="bi bi-grid me-1 text-info"></i> Mi panel
+          </a>
+        </li>
+        <?php else: ?>
+        <li class="nav-item">
+          <a class="nav-link text-white fw-semibold px-2 py-1 rounded" href="index.php?action=login">
+            <i class="bi bi-box-arrow-in-right me-1 text-info"></i> Iniciar sesión
+          </a>
+        </li>
+        <?php endif; ?>
         <li class="nav-item">
           <a class="nav-link text-white fw-semibold px-2 py-1 rounded" href="index.php?action=catalogo">
             <i class="bi bi-calendar-event me-1 text-info"></i> Catálogo

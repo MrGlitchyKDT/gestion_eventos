@@ -39,6 +39,11 @@ class Usuario {
      * RF-01: Registro de nuevos participantes
      */
     public function registrar(array $datos): bool {
+        // El registro público siempre crea participantes, independientemente del ID del catálogo.
+        $idRol = $this->db->query("SELECT id_rol FROM roles WHERE UPPER(TRIM(nombre)) = 'PARTICIPANTE' LIMIT 1")->fetchColumn();
+        if ($idRol === false) {
+            throw new RuntimeException('El rol PARTICIPANTE no está configurado.');
+        }
         $sql = "INSERT INTO usuarios (ci, nombres, apellidos, correo, telefono, password_hash, id_rol, activo)
                 VALUES (:ci, :nombres, :apellidos, :correo, :telefono, :password_hash, :id_rol, 1)";
         $stmt = $this->db->prepare($sql);
@@ -49,7 +54,7 @@ class Usuario {
             ':correo'        => strtolower(trim($datos['correo'])),
             ':telefono'      => trim($datos['telefono'] ?? ''),
             ':password_hash' => password_hash($datos['password'], PASSWORD_BCRYPT),
-            ':id_rol'        => $datos['id_rol'] ?? 3 // 3 = PARTICIPANTE
+            ':id_rol'        => (int)$idRol
         ]);
     }
 

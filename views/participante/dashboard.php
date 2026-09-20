@@ -1,4 +1,6 @@
-<?php 
+<?php
+require_once __DIR__ . '/../../helpers/AuthHelper.php';
+AuthHelper::requerirRol(['PARTICIPANTE', 'ADMINISTRADOR']);
 $titulo_pagina = "Portal Académico — Convocatorias Abiertas";
 $seccion_activa = "dashboard_participante";
 require_once __DIR__ . '/../layouts/header.php';

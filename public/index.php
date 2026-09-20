@@ -2,8 +2,15 @@
 // gestion_eventos/public/index.php
 require_once __DIR__ . '/../helpers/AuthHelper.php';
 AuthHelper::initSession();
+AuthHelper::verificarSesionActual();
 
-$action = $_GET['action'] ?? 'catalogo';
+$action = is_string($_GET['action'] ?? null) ? $_GET['action'] : 'catalogo';
+
+// Una sesión vigente siempre entra a su módulo desde la raíz o las pantallas de acceso.
+if (AuthHelper::estaAutenticado() && (!isset($_GET['action'])
+    || in_array($action, ['login', 'do_login', 'registro', 'do_registro', 'recuperar', 'do_recuperar'], true))) {
+    AuthHelper::redirigirInicio();
+}
 
 // 1. Rutas públicas (sin requerir inicio de sesión)
 $rutas_publicas = [
