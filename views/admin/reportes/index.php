@@ -51,6 +51,38 @@ $listaEventos = $repCtrl->reporteEventos();
         </div>
       </div>
 
+      <!-- Bitácora de Auditoría Administrativa Reciente -->
+      <div class="card border-0 shadow-sm mt-4 mb-4">
+        <div class="card-header bg-white py-3">
+          <h2 class="h6 fw-bold mb-0 text-uab-azul"><i class="bi bi-shield-check me-2"></i>Actividad Administrativa Reciente (Auditoría)</h2>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th>Fecha y hora</th><th>Administrador</th><th>Módulo</th><th>Acción realizada</th><th>Detalles</th></tr></thead>
+            <tbody>
+              <?php if (empty($ultimasAuditorias)): ?>
+                <tr><td colspan="5" class="text-center py-4 text-muted">Sin registros recientes de auditoría.</td></tr>
+              <?php else: ?>
+                <?php foreach ($ultimasAuditorias as $aud): ?>
+                  <tr>
+                    <td class="small text-muted text-nowrap"><?= date('d/m/Y H:i', strtotime($aud['fecha_registro'])) ?></td>
+                    <td><strong class="small"><?= htmlspecialchars($aud['nombres'] . ' ' . $aud['apellidos']) ?></strong></td>
+                    <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($aud['modulo']) ?></span></td>
+                    <td><code class="small"><?= htmlspecialchars($aud['accion']) ?></code></td>
+                    <td class="small text-secondary"><?= htmlspecialchars($aud['detalles'] ?? '—') ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer bg-white border-top text-center py-3 no-print">
+          <a href="index.php?action=admin_auditoria" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-list-ul me-1"></i> Ver todas las actividades
+          </a>
+        </div>
+      </div>
+
       <!-- Tabla Resumen de Eventos e Indicadores -->
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white py-3">

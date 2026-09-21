@@ -105,8 +105,8 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
   min-height: 72px;
   background-color: var(--uab-azul) !important;
   border-bottom: 0;
-  /* Debe quedar sobre tarjetas sticky, modales ligeros y sus propios dropdowns. */
-  z-index: 1080 !important;
+  /* Sobre el contenido fijo, pero debajo de los modales de Bootstrap (1050+). */
+  z-index: 1040 !important;
 }
 
 .app-navbar .container-xl {
@@ -181,7 +181,7 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
 /* Apertura y cierre suaves de los menús desplegables. */
 .app-navbar .dropdown-menu {
   display: block;
-  z-index: 1081;
+  z-index: 1041;
   visibility: hidden;
   opacity: 0;
   transform: translateY(-6px);
@@ -192,6 +192,74 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
   visibility: visible;
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Lista administrativa de eventos: lectura y acciones más cómodas. */
+.tabla-eventos-admin thead th {
+  font-size: 1rem;
+  padding: 0.85rem 0.75rem;
+}
+
+.tabla-eventos-admin tbody td {
+  font-size: 0.95rem;
+  padding: 0.85rem 0.75rem;
+}
+
+.tabla-eventos-admin tbody td > strong {
+  font-size: 1.05rem;
+}
+
+.tabla-eventos-admin .small,
+.tabla-eventos-admin code {
+  font-size: 0.85rem;
+}
+
+.tabla-eventos-admin .btn-sm {
+  padding: 0.38rem 0.56rem;
+  font-size: 0.95rem;
+}
+
+.tabla-eventos-admin .form-check-input {
+  width: 2.1em;
+  height: 1.1em;
+}
+
+/* Escala de lectura para el contenido de la aplicación, sin alterar auth, header ni footer. */
+body:not(.auth-body) main {
+  font-size: 1.08rem;
+}
+
+body:not(.auth-body) main .form-control,
+body:not(.auth-body) main .form-select,
+body:not(.auth-body) main .form-check-label {
+  font-size: 1.05rem;
+}
+
+body:not(.auth-body) main .form-control,
+body:not(.auth-body) main .form-select {
+  padding: 0.55rem 0.75rem;
+}
+
+body:not(.auth-body) main .btn {
+  font-size: 1.05rem;
+  padding: 0.48rem 0.85rem;
+}
+
+body:not(.auth-body) main .table {
+  font-size: 1.02rem;
+}
+
+body:not(.auth-body) main .table > :not(caption) > * > * {
+  padding-top: 0.7rem;
+  padding-bottom: 0.7rem;
+}
+
+/* Contenedor central para las áreas de administrador, expositor y participante. */
+body:not(.auth-body) main.container-fluid {
+  width: 100%;
+  max-width: 1500px;
+  margin-right: auto;
+  margin-left: auto;
 }
 
 /* ==========================================================================

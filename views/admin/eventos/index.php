@@ -29,7 +29,7 @@ require_once __DIR__ . '/../../layouts/navbar.php';
       <?php endif; ?>
 
       <div class="table-responsive card border-0 shadow-sm">
-        <table class="table table-uab table-hover align-middle mb-0">
+        <table class="table table-uab tabla-eventos-admin table-hover align-middle mb-0">
           <thead>
             <tr>
               <th scope="col">Evento</th>

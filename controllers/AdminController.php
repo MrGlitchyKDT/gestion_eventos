@@ -28,22 +28,33 @@ class AdminController {
         $this->reimpresionModel = new SolicitudReimpresion();
     }
 
-    /**
-     * Métricas principales (KPIs) y resumen global para el Dashboard
-     */
+    /** Inicio administrativo con acceso a los módulos de gestión. */
     public function dashboard(): void {
         AuthHelper::requerirRol(['ADMINISTRADOR']);
-
-        // Indicadores clave
-        $totalInscripciones = (int)$this->db->query("SELECT COUNT(*) FROM inscripciones WHERE estado = 'INSCRITO'")->fetchColumn();
-        $totalCertificados  = (int)$this->db->query("SELECT COUNT(*) FROM certificados WHERE estado = 'EMITIDO'")->fetchColumn();
-        $solicitudesPend    = (int)$this->db->query("SELECT COUNT(*) FROM solicitudes_reimpresion WHERE estado = 'PENDIENTE'")->fetchColumn();
-        $totalUsuarios      = (int)$this->db->query("SELECT COUNT(*) FROM usuarios WHERE activo = 1")->fetchColumn();
-
-        // Últimos registros de auditoría
-        $ultimasAuditorias = (new Auditoria())->listar(8, 0);
-
         require_once __DIR__ . '/../views/admin/dashboard.php';
+    }
+
+    /** Reportes, exportaciones y últimos movimientos administrativos. */
+    public function reportes(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        $ultimasAuditorias = (new Auditoria())->listar(10, 0);
+        require_once __DIR__ . '/../views/admin/reportes/index.php';
+    }
+
+    /** Bitácora completa de acciones administrativas, paginada. */
+    public function auditoria(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+
+        $pagina = filter_input(INPUT_GET, 'pagina', FILTER_VALIDATE_INT);
+        $pagina = $pagina && $pagina > 0 ? $pagina : 1;
+        $porPagina = 50;
+        $auditoriaModel = new Auditoria();
+        $totalAuditorias = $auditoriaModel->contar();
+        $totalPaginas = max(1, (int)ceil($totalAuditorias / $porPagina));
+        $pagina = min($pagina, $totalPaginas);
+        $auditorias = $auditoriaModel->listar($porPagina, ($pagina - 1) * $porPagina);
+
+        require_once __DIR__ . '/../views/admin/auditoria/index.php';
     }
 
     /**
@@ -158,36 +169,99 @@ class AdminController {
      * RF-38 y RF-39: Gestión de Tipos de Eventos
      */
     public function tiposEventos(): void {
-        AuthHelper::requerirRol(['ADMINISTRADOR']);
-        $tipos = $this->db->query("SELECT * FROM tipos_evento ORDER BY nombre ASC")->fetchAll();
-        require_once __DIR__ . '/../views/admin/tipos_evento/index.php';
+        $this->configuracionEventos();
     }
 
-    public function guardarTipoEvento(): void {
+    /** Gestiona tipos y categorías disponibles para los formularios de eventos. */
+    public function configuracionEventos(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        $tipos = $this->db->query("SELECT te.*, (SELECT COUNT(*) FROM eventos e WHERE e.id_tipo_evento = te.id_tipo_evento) AS eventos_asociados FROM tipos_evento te ORDER BY te.activo DESC, te.nombre ASC")->fetchAll();
+        $categorias = $this->db->query("SELECT c.*, (SELECT COUNT(*) FROM eventos e WHERE e.id_categoria = c.id_categoria) AS eventos_asociados FROM categorias c ORDER BY c.activo DESC, c.nombre ASC")->fetchAll();
+        require_once __DIR__ . '/../views/admin/configuracion_eventos/index.php';
+    }
+
+    public function guardarCatalogoEvento(): void {
         AuthHelper::requerirRol(['ADMINISTRADOR']);
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: index.php?action=admin_tipos_eventos');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar el registro de la configuración.';
+            header('Location: index.php?action=admin_configuracion_eventos');
             exit();
         }
 
-        $nombre = trim($_POST['nombre'] ?? '');
+        $catalogo = $_POST['catalogo'] ?? '';
+        $definiciones = [
+            'tipo' => ['tabla' => 'tipos_evento', 'clave' => 'id_tipo_evento', 'etiqueta' => 'Tipo de evento'],
+            'categoria' => ['tabla' => 'categorias', 'clave' => 'id_categoria', 'etiqueta' => 'Categoría'],
+        ];
+        $definicion = $definiciones[$catalogo] ?? null;
+        $nombre = mb_substr(trim($_POST['nombre'] ?? ''), 0, 100);
         $admin  = AuthHelper::obtenerUsuario();
 
-        if (!empty($nombre)) {
-            $stmt = $this->db->prepare("INSERT INTO tipos_evento (nombre, activo) VALUES (:nombre, 1) ON DUPLICATE KEY UPDATE activo = 1");
+        if ($definicion && $nombre !== '') {
+            $stmt = $this->db->prepare("INSERT INTO {$definicion['tabla']} (nombre, activo) VALUES (:nombre, 1) ON DUPLICATE KEY UPDATE activo = 1");
             $stmt->execute([':nombre' => $nombre]);
 
             Auditoria::registrar(
                 (int)$admin['id_usuario'],
-                'CREAR_TIPO_EVENTO',
+                'GUARDAR_CATALOGO_EVENTO',
                 'EVENTOS',
-                "Registro de nuevo tipo de evento: {$nombre}"
+                "{$definicion['etiqueta']} guardado: {$nombre}"
             );
-            $_SESSION['success'] = "Tipo de evento guardado con éxito.";
+            $_SESSION['success'] = "{$definicion['etiqueta']} guardado con éxito.";
+        } else {
+            $_SESSION['error'] = 'Ingrese un nombre y seleccione una configuración válida.';
         }
 
-        header('Location: index.php?action=admin_tipos_eventos');
+        header('Location: index.php?action=admin_configuracion_eventos');
+        exit();
+    }
+
+    /** Elimina catálogos sin uso o los desactiva cuando ya tienen eventos asociados. */
+    public function eliminarCatalogoEvento(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar la eliminación de la configuración.';
+            header('Location: index.php?action=admin_configuracion_eventos');
+            exit();
+        }
+
+        $catalogo = $_POST['catalogo'] ?? '';
+        $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
+        $definiciones = [
+            'tipo' => ['tabla' => 'tipos_evento', 'clave' => 'id_tipo_evento', 'campo_evento' => 'id_tipo_evento', 'etiqueta' => 'Tipo de evento'],
+            'categoria' => ['tabla' => 'categorias', 'clave' => 'id_categoria', 'campo_evento' => 'id_categoria', 'etiqueta' => 'Categoría'],
+        ];
+        $definicion = $definiciones[$catalogo] ?? null;
+
+        try {
+            if (!$definicion || !$id) {
+                throw new InvalidArgumentException('La configuración seleccionada no es válida.');
+            }
+            $stmtNombre = $this->db->prepare("SELECT nombre FROM {$definicion['tabla']} WHERE {$definicion['clave']} = :id LIMIT 1");
+            $stmtNombre->execute([':id' => $id]);
+            $nombre = $stmtNombre->fetchColumn();
+            if ($nombre === false) {
+                throw new InvalidArgumentException('La configuración ya no existe.');
+            }
+            $stmtUso = $this->db->prepare("SELECT COUNT(*) FROM eventos WHERE {$definicion['campo_evento']} = :id");
+            $stmtUso->execute([':id' => $id]);
+            $enUso = (int)$stmtUso->fetchColumn();
+            if ($enUso > 0) {
+                $stmt = $this->db->prepare("UPDATE {$definicion['tabla']} SET activo = 0 WHERE {$definicion['clave']} = :id");
+                $stmt->execute([':id' => $id]);
+                $_SESSION['success'] = "{$definicion['etiqueta']} desactivado: tiene {$enUso} evento(s) asociado(s).";
+            } else {
+                $stmt = $this->db->prepare("DELETE FROM {$definicion['tabla']} WHERE {$definicion['clave']} = :id");
+                $stmt->execute([':id' => $id]);
+                $_SESSION['success'] = "{$definicion['etiqueta']} eliminado correctamente.";
+            }
+            $admin = AuthHelper::obtenerUsuario();
+            Auditoria::registrar((int)$admin['id_usuario'], 'ELIMINAR_CATALOGO_EVENTO', 'EVENTOS', "{$definicion['etiqueta']}: {$nombre}");
+        } catch (Exception $e) {
+            $_SESSION['error'] = 'No se pudo actualizar la configuración: ' . $e->getMessage();
+        }
+        header('Location: index.php?action=admin_configuracion_eventos');
         exit();
     }
 

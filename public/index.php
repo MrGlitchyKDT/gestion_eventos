@@ -284,16 +284,35 @@ switch ($action) {
         break;
 
     case 'admin_tipo_evento_guardar':
+        header('Location: index.php?action=admin_configuracion_eventos', true, 303);
+        exit();
+
+    case 'admin_configuracion_eventos':
         require_once __DIR__ . '/../controllers/AdminController.php';
-        (new AdminController())->guardarTipoEvento();
+        (new AdminController())->configuracionEventos();
+        break;
+
+    case 'admin_catalogo_evento_guardar':
+        require_once __DIR__ . '/../controllers/AdminController.php';
+        (new AdminController())->guardarCatalogoEvento();
+        break;
+
+    case 'admin_catalogo_evento_eliminar':
+        require_once __DIR__ . '/../controllers/AdminController.php';
+        (new AdminController())->eliminarCatalogoEvento();
         break;
 
     // ==========================================
     // REPORTES Y EXPORTACIONES (RF-71 a RF-76)
     // ==========================================
     case 'admin_reportes':
-        AuthHelper::requerirRol(['ADMINISTRADOR']);
-        require_once __DIR__ . '/../views/admin/reportes/index.php';
+        require_once __DIR__ . '/../controllers/AdminController.php';
+        (new AdminController())->reportes();
+        break;
+
+    case 'admin_auditoria':
+        require_once __DIR__ . '/../controllers/AdminController.php';
+        (new AdminController())->auditoria();
         break;
 
     case 'admin_exportar_reporte':

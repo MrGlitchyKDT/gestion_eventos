@@ -51,4 +51,9 @@ class Auditoria {
         $stmt->execute();
         return $stmt->fetchAll();
     }
+
+    /** Devuelve el total de registros disponibles para paginar la bitácora. */
+    public function contar(): int {
+        return (int)$this->db->query("SELECT COUNT(*) FROM auditoria_actividad")->fetchColumn();
+    }
 }

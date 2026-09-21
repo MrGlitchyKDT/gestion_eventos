@@ -71,6 +71,7 @@ El administrador inicia en `admin_dashboard`, reservado como resumen institucion
 * Gestionar los archivos ya publicados: descargarlos o eliminarlos desde el modal de edición.
 * Asignar expositores activos a un evento, indicar su función y retirar asignaciones cuando sea necesario.
 * Registrar varias sesiones por evento con título, fecha, horario y lugar. La fecha de cada sesión se valida contra el rango del evento; también se pueden eliminar sesiones.
+* Configurar tipos y categorías de eventos. Los registros sin eventos asociados se eliminan; los que forman parte del historial se desactivan.
 * Gestionar usuarios, roles, estados de cuentas, inscripciones administrativas y reportes CSV.
 * Las operaciones relevantes de eventos, materiales, sesiones y asignaciones de expositores se registran en `auditoria_actividad`.
 
@@ -131,6 +132,8 @@ La tabla `asistencias` mantiene un único registro por combinación de sesión e
 | `admin_eventos` | Crear, editar y administrar eventos, materiales, sesiones y expositores |
 | `admin_evento_asignar_expositor` / `admin_evento_desasignar_expositor` | Gestionar responsables académicos del evento |
 | `admin_evento_crear_sesion` / `admin_evento_eliminar_sesion` | Gestionar el cronograma |
+| `admin_reportes` | Exportaciones, las 10 actividades administrativas más recientes y el consolidado activo |
+| `admin_auditoria` | Consultar el historial administrativo completo con paginación |
 | `descargar_material` | Descarga protegida de un material de evento |
 | `expositor_asistencia` | Planilla filtrable de asistencia |
 | `api_guardar_asistencia` | Endpoint JSON para marcar asistencia |

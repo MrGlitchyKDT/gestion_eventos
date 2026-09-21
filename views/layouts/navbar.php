@@ -55,6 +55,11 @@ $inicialNav = $usuarioNav
             <i class="bi bi-bar-chart me-1 text-info"></i> Reportes
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link text-white fw-semibold px-2 py-1 rounded" href="index.php?action=admin_configuracion_eventos">
+            <i class="bi bi-gear me-1 text-info"></i> Configuración
+          </a>
+        </li>
         <?php else: ?>
           <?php if ($rolNav !== 'EXPOSITOR'): ?>
             <li class="nav-item">

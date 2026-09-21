@@ -12,26 +12,6 @@ require_once __DIR__ . '/../layouts/navbar.php';
   <div class="row g-3 align-items-start">
     <section class="col-12">
       
-      <!-- Banner Compacto Institucional -->
-      <div class="dashboard-hero rounded-3 p-4 mb-4 text-white shadow-sm position-relative overflow-hidden">
-        <div class="row align-items-center">
-          <div class="col-md-8">
-            <span class="badge bg-white text-uab-azul px-2 py-1 mb-2 fw-semibold" style="font-size: 0.75rem;">
-              <i class="bi bi-mortarboard-fill me-1"></i> Formación Continua & Extensión
-            </span>
-            <h1 class="h4 fw-bold mb-1">Convocatorias Académicas Abiertas</h1>
-            <p class="small text-white-50 mb-0">
-              Inscríbete en los cursos, talleres y conferencias oficiales con certificación de la Universidad.
-            </p>
-          </div>
-          <div class="col-md-4 text-md-end mt-3 mt-md-0">
-            <a href="index.php?action=mis_inscripciones" class="btn btn-outline-light btn-sm rounded-pill px-3 py-2 fw-semibold">
-              <i class="bi bi-journal-check me-1"></i> Mis Inscripciones (<?= $totalMisInscripciones ?>)
-            </a>
-          </div>
-        </div>
-      </div>
-
       <!-- Alertas de Sesión -->
       <?php if (!empty($_SESSION['success'])): ?>
         <div class="alert alert-success py-2 small d-flex align-items-center mb-3">
