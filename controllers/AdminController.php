@@ -34,10 +34,6 @@ class AdminController {
     public function dashboard(): void {
         AuthHelper::requerirRol(['ADMINISTRADOR']);
 
-        // Conteo de eventos por estado
-        $stmtEventos = $this->db->query("SELECT estado, COUNT(*) as total FROM eventos GROUP BY estado");
-        $eventosPorEstado = $stmtEventos->fetchAll(PDO::FETCH_KEY_PAIR);
-
         // Indicadores clave
         $totalInscripciones = (int)$this->db->query("SELECT COUNT(*) FROM inscripciones WHERE estado = 'INSCRITO'")->fetchColumn();
         $totalCertificados  = (int)$this->db->query("SELECT COUNT(*) FROM certificados WHERE estado = 'EMITIDO'")->fetchColumn();

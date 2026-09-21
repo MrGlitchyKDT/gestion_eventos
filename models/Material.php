@@ -4,6 +4,16 @@ require_once __DIR__ . '/../config/Database.php';
 
 class Material {
     private PDO $db;
+    private const TAMANO_MAXIMO = 20971520; // 20 MB
+    private const TIPOS_PERMITIDOS = [
+        'pdf'  => ['application/pdf'],
+        'zip'  => ['application/zip', 'application/x-zip-compressed', 'multipart/x-zip'],
+        'rar'  => ['application/vnd.rar', 'application/x-rar-compressed', 'application/octet-stream'],
+        'pptx' => ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+        'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        'txt'  => ['text/plain'],
+    ];
 
     public function __construct() {
         $this->db = Database::getConnection();
@@ -18,24 +28,27 @@ class Material {
         }
 
         // Límite de 20 MB por archivo
-        if ($archivo['size'] > 20 * 1024 * 1024) {
+        if ($archivo['size'] < 1 || $archivo['size'] > self::TAMANO_MAXIMO) {
             throw new Exception("El archivo excede el tamaño máximo permitido de 20MB.");
         }
 
         $extension = strtolower(pathinfo($archivo['name'], PATHINFO_EXTENSION));
-        $extensionesPermitidas = ['pdf', 'zip', 'rar', 'pptx', 'docx', 'xlsx', 'txt'];
-
-        if (!in_array($extension, $extensionesPermitidas, true)) {
-            throw new Exception("Tipo de archivo no permitido. Solo se aceptan: " . implode(', ', $extensionesPermitidas));
+        if (!isset(self::TIPOS_PERMITIDOS[$extension])) {
+            throw new Exception("Tipo de archivo no permitido. Solo se aceptan: PDF, ZIP, RAR, PPTX, DOCX, XLSX y TXT.");
         }
 
-        $directorioDestino = __DIR__ . '/../public/uploads/materiales/';
+        $mime = (new finfo(FILEINFO_MIME_TYPE))->file($archivo['tmp_name']);
+        if ($mime === false || !in_array($mime, self::TIPOS_PERMITIDOS[$extension], true)) {
+            throw new Exception('El contenido del archivo no coincide con el formato indicado.');
+        }
+
+        // Los archivos se almacenan fuera del directorio público y se sirven mediante una ruta autorizada.
+        $directorioDestino = $this->directorioAlmacenamiento();
         if (!is_dir($directorioDestino)) {
             mkdir($directorioDestino, 0755, true);
         }
 
-        $nombreLimpio = preg_replace('/[^a-zA-Z0-9_-]/', '', pathinfo($archivo['name'], PATHINFO_FILENAME));
-        $nombreGuardado = 'mat_' . $id_evento . '_' . time() . '_' . substr($nombreLimpio, 0, 30) . '.' . $extension;
+        $nombreGuardado = bin2hex(random_bytes(20)) . '.' . $extension;
         $rutaCompleta = $directorioDestino . $nombreGuardado;
 
         if (!move_uploaded_file($archivo['tmp_name'], $rutaCompleta)) {
@@ -52,14 +65,40 @@ class Material {
         $stmt->execute([
             ':id_evento'    => $id_evento,
             ':id_usuario'   => $id_usuario,
-            ':titulo'       => trim($titulo),
+            ':titulo'       => mb_substr(trim($titulo), 0, 150),
             ':descripcion' => !empty($descripcion) ? trim($descripcion) : null,
-            ':ruta'         => 'uploads/materiales/' . $nombreGuardado,
+            ':ruta'         => $nombreGuardado,
             ':tipo'         => strtoupper($extension),
             ':tamano'       => (int)$archivo['size']
         ]);
 
         return (int)$this->db->lastInsertId();
+    }
+
+    /** Recibe el campo HTML materiales[] y registra cada archivo seleccionado. */
+    public function subirMultiples(int $idEvento, int $idUsuario, array $archivos): int {
+        if (!isset($archivos['name'])) {
+            return 0;
+        }
+
+        $nombres = is_array($archivos['name']) ? $archivos['name'] : [$archivos['name']];
+        $total = 0;
+        foreach ($nombres as $indice => $nombre) {
+            $archivo = [
+                'name' => $nombre,
+                'type' => is_array($archivos['type'] ?? null) ? ($archivos['type'][$indice] ?? '') : ($archivos['type'] ?? ''),
+                'tmp_name' => is_array($archivos['tmp_name'] ?? null) ? ($archivos['tmp_name'][$indice] ?? '') : ($archivos['tmp_name'] ?? ''),
+                'error' => is_array($archivos['error'] ?? null) ? ($archivos['error'][$indice] ?? UPLOAD_ERR_NO_FILE) : ($archivos['error'] ?? UPLOAD_ERR_NO_FILE),
+                'size' => is_array($archivos['size'] ?? null) ? ($archivos['size'][$indice] ?? 0) : ($archivos['size'] ?? 0),
+            ];
+            if ($archivo['error'] === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+            $titulo = pathinfo(basename((string)$archivo['name']), PATHINFO_FILENAME) ?: 'Material del evento';
+            $this->subir($idEvento, $idUsuario, $titulo, null, $archivo);
+            $total++;
+        }
+        return $total;
     }
 
     /**
@@ -79,6 +118,38 @@ class Material {
         return $stmt->fetchAll();
     }
 
+    /** Lista materiales para varios eventos y los agrupa por id_evento. */
+    public function listarAgrupadosPorEventos(array $idsEventos): array {
+        $idsEventos = array_values(array_unique(array_filter(array_map('intval', $idsEventos))));
+        if ($idsEventos === []) {
+            return [];
+        }
+        $marcadores = implode(',', array_fill(0, count($idsEventos), '?'));
+        $stmt = $this->db->prepare("SELECT id_material, id_evento, titulo, tipo_archivo, tamano_bytes FROM materiales_evento WHERE id_evento IN ({$marcadores}) ORDER BY fecha_publicacion DESC");
+        $stmt->execute($idsEventos);
+        $resultado = [];
+        foreach ($stmt->fetchAll() as $material) {
+            $resultado[(int)$material['id_evento']][] = $material;
+        }
+        return $resultado;
+    }
+
+    public function obtenerPorId(int $idMaterial): ?array {
+        $stmt = $this->db->prepare('SELECT * FROM materiales_evento WHERE id_material = :id LIMIT 1');
+        $stmt->execute([':id' => $idMaterial]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public function usuarioPuedeDescargar(int $idEvento, int $idUsuario): bool {
+        $stmt = $this->db->prepare("SELECT 1 FROM inscripciones WHERE id_evento = :evento AND id_usuario = :usuario AND estado IN ('INSCRITO', 'ASISTIO', 'APROBADO', 'REPROBADO') LIMIT 1");
+        $stmt->execute([':evento' => $idEvento, ':usuario' => $idUsuario]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    public function rutaFisica(array $material): string {
+        return $this->directorioAlmacenamiento() . basename((string)$material['ruta_archivo']);
+    }
+
     public function eliminar(int $id_material): bool {
         $sql = "SELECT ruta_archivo FROM materiales_evento WHERE id_material = :id LIMIT 1";
         $stmt = $this->db->prepare($sql);
@@ -86,7 +157,7 @@ class Material {
         $material = $stmt->fetch();
 
         if ($material) {
-            $archivoFisico = __DIR__ . '/../public/' . $material['ruta_archivo'];
+            $archivoFisico = $this->rutaFisica($material);
             if (file_exists($archivoFisico)) {
                 unlink($archivoFisico);
             }
@@ -96,5 +167,9 @@ class Material {
             return $stmtDel->execute([':id' => $id_material]);
         }
         return false;
+    }
+
+    private function directorioAlmacenamiento(): string {
+        return __DIR__ . '/../storage/materiales/';
     }
 }

@@ -8,7 +8,7 @@ if (parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) === '/__health') {
     exit('auth-test-ready');
 }
 $acciones = ['login', 'do_login', 'registro', 'do_registro', 'logout', 'catalogo',
-    'admin_dashboard', 'participante_dashboard', 'expositor_eventos'];
+    'admin_dashboard', 'admin_eventos', 'participante_dashboard', 'expositor_eventos'];
 if (!in_array(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), ['/', '/index.php'], true)
     || (isset($_GET['action']) && !in_array($_GET['action'], $acciones, true))) {
     http_response_code(404);

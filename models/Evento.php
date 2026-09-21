@@ -160,6 +160,21 @@ class Evento {
         return $stmt->fetchAll();
     }
 
+    /** Lista todos los eventos para administración, incluidos borradores y finalizados. */
+    public function listarParaAdministracion(): array {
+        $sql = "SELECT
+                    e.*,
+                    te.nombre AS tipo_evento_nombre,
+                    c.nombre AS categoria_nombre,
+                    (SELECT COUNT(*) FROM inscripciones i WHERE i.id_evento = e.id_evento AND i.estado = 'INSCRITO') AS total_inscritos
+                FROM eventos e
+                INNER JOIN tipos_evento te ON e.id_tipo_evento = te.id_tipo_evento
+                INNER JOIN categorias c ON e.id_categoria = c.id_categoria
+                ORDER BY e.fecha_creacion DESC";
+
+        return $this->db->query($sql)->fetchAll();
+    }
+
     /**
      * RF-09: Detalle completo de un evento individual
      */
@@ -223,6 +238,30 @@ class Evento {
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id_evento' => $id_evento]);
         return $stmt->fetchAll();
+    }
+
+    /** Obtiene los expositores de varios eventos para la gestión administrativa. */
+    public function listarExpositoresAgrupadosPorEventos(array $idsEventos): array {
+        $idsEventos = array_values(array_unique(array_filter(array_map('intval', $idsEventos))));
+        if ($idsEventos === []) {
+            return [];
+        }
+
+        $marcadores = implode(',', array_fill(0, count($idsEventos), '?'));
+        $stmt = $this->db->prepare(
+            "SELECT ee.id_evento, ee.id_usuario, ee.rol_expositor, u.nombres, u.apellidos, u.correo
+             FROM evento_expositores ee
+             INNER JOIN usuarios u ON u.id_usuario = ee.id_usuario
+             WHERE ee.id_evento IN ({$marcadores})
+             ORDER BY u.apellidos ASC, u.nombres ASC"
+        );
+        $stmt->execute($idsEventos);
+
+        $resultado = [];
+        foreach ($stmt->fetchAll() as $expositor) {
+            $resultado[(int)$expositor['id_evento']][] = $expositor;
+        }
+        return $resultado;
     }
 
     /**

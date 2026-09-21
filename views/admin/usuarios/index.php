@@ -5,13 +5,9 @@ require_once __DIR__ . '/../../layouts/header.php';
 require_once __DIR__ . '/../../layouts/navbar.php'; 
 ?>
 
-<main class="container py-4">
+<main class="container-fluid px-3 px-md-4 py-4">
   <div class="row g-4">
-    <aside class="col-lg-3">
-      <?php require_once __DIR__ . '/../../layouts/sidebar.php'; ?>
-    </aside>
-
-    <section class="col-lg-9">
+    <section class="col-12">
       <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
           <h1 class="h3 fw-bold text-uab-azul mb-0">Gestión de Usuarios</h1>

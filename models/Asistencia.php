@@ -128,6 +128,7 @@ class Asistencia {
                     u.ci,
                     u.nombres,
                     u.apellidos,
+                    i.porcentaje_asistencia,
                     a.id_asistencia,
                     COALESCE(a.estado, 'SIN_REGISTRO') AS estado_asistencia,
                     a.observacion,
@@ -143,6 +144,24 @@ class Asistencia {
             ':id_sesion' => $id_sesion,
             ':id_evento' => $id_evento
         ]);
+        return $stmt->fetchAll();
+    }
+
+    /** Informe detallado de todas las sesiones de un evento para exportación. */
+    public function listarInformePorEvento(int $idEvento): array {
+        $stmt = $this->db->prepare(
+            "SELECT se.titulo AS sesion_titulo, se.fecha, se.hora_inicio, se.hora_fin,
+                    u.ci, u.nombres, u.apellidos, u.correo,
+                    COALESCE(a.estado, 'SIN_REGISTRO') AS estado_asistencia, a.observacion,
+                    i.porcentaje_asistencia
+             FROM sesiones_evento se
+             INNER JOIN inscripciones i ON i.id_evento = se.id_evento AND i.estado = 'INSCRITO'
+             INNER JOIN usuarios u ON u.id_usuario = i.id_usuario
+             LEFT JOIN asistencias a ON a.id_sesion = se.id_sesion AND a.id_inscripcion = i.id_inscripcion
+             WHERE se.id_evento = :evento
+             ORDER BY se.fecha ASC, se.hora_inicio ASC, u.apellidos ASC, u.nombres ASC"
+        );
+        $stmt->execute([':evento' => $idEvento]);
         return $stmt->fetchAll();
     }
 }

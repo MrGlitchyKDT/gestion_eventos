@@ -15,14 +15,8 @@ $rolNombre = htmlspecialchars($u['rol_nombre'] ?? 'PARTICIPANTE');
 
 <main class="container-fluid px-3 px-md-4 py-3">
   <div class="row g-3">
-    
-    <!-- Menú Lateral -->
-    <aside class="col-12 col-lg-3 col-xl-2">
-      <?php require_once __DIR__ . '/../layouts/sidebar.php'; ?>
-    </aside>
-
     <!-- Contenido Principal -->
-    <section class="col-12 col-lg-9 col-xl-10">
+    <section class="col-12">
 
       <!-- Banner Hero del Perfil -->
       <div class="rounded-4 p-4 p-md-5 mb-4 text-white shadow-sm position-relative overflow-hidden" 

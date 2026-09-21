@@ -42,28 +42,17 @@ $seccionActiva = $seccion_activa ?? '';
 
   <!-- Enlaces de navegación -->
   <nav class="nav flex-column gap-1">
-    <?php if ($rol === 'ADMINISTRADOR'): ?>
-      <a class="nav-link nav-link-compact <?= ($seccionActiva === 'dashboard') ? 'active' : '' ?>" href="index.php?action=admin_dashboard">
-        <i class="bi bi-speedometer2 me-2"></i> Resumen General
-      </a>
-      <a class="nav-link nav-link-compact <?= ($seccionActiva === 'eventos') ? 'active' : '' ?>" href="index.php?action=admin_eventos">
-        <i class="bi bi-calendar-event me-2"></i> Gestión de Eventos
-      </a>
-      <a class="nav-link nav-link-compact <?= ($seccionActiva === 'usuarios') ? 'active' : '' ?>" href="index.php?action=admin_usuarios">
-        <i class="bi bi-people me-2"></i> Gestión de Usuarios
-      </a>
-      <a class="nav-link nav-link-compact <?= ($seccionActiva === 'reportes') ? 'active' : '' ?>" href="index.php?action=admin_reportes">
-        <i class="bi bi-bar-chart me-2"></i> Reportes
-      </a>
-      <hr class="my-1 text-muted">
-    <?php elseif ($rol === 'EXPOSITOR'): ?>
+    <?php if ($rol === 'EXPOSITOR'): ?>
       <a class="nav-link nav-link-compact <?= ($seccionActiva === 'mis_eventos') ? 'active' : '' ?>" href="index.php?action=expositor_eventos">
         <i class="bi bi-clipboard-check me-2"></i> Mis Eventos
+      </a>
+      <a class="nav-link nav-link-compact <?= ($seccionActiva === 'asistencia') ? 'active' : '' ?>" href="index.php?action=expositor_asistencia">
+        <i class="bi bi-check2-square me-2"></i> Asistencia
       </a>
       <hr class="my-1 text-muted">
     <?php endif; ?>
 
-    <?php if (in_array($rol, ['PARTICIPANTE', 'ADMINISTRADOR'], true)): ?>
+    <?php if ($rol === 'PARTICIPANTE'): ?>
     <a class="nav-link nav-link-compact <?= ($seccionActiva === 'dashboard_participante') ? 'active' : '' ?>" href="index.php?action=participante_dashboard">
       <i class="bi bi-compass me-2"></i> Explorar Eventos
     </a>

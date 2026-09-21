@@ -100,6 +100,100 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
   color: #38bdf8 !important;
 }
 
+/* Encabezado institucional compartido por las páginas internas y públicas. */
+.app-navbar {
+  min-height: 72px;
+  background-color: var(--uab-azul) !important;
+  border-bottom: 0;
+  /* Debe quedar sobre tarjetas sticky, modales ligeros y sus propios dropdowns. */
+  z-index: 1080 !important;
+}
+
+.app-navbar .container-xl {
+  width: 100%;
+}
+
+.app-navbar-brand {
+  color: #fff !important;
+}
+
+.app-navbar-title {
+  color: #fff;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.app-navbar-subtitle {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.app-navbar .navbar-toggler {
+  padding-right: 0;
+}
+
+.app-navbar-menu {
+  flex-grow: 1;
+}
+
+.app-profile-toggle {
+  color: #fff !important;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+}
+
+.app-profile-toggle:hover,
+.app-profile-toggle:focus {
+  color: #fff !important;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.app-profile-avatar {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--uab-azul);
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+}
+
+.app-profile-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-profile-menu {
+  min-width: 210px;
+  border: 0;
+  border-radius: 10px;
+}
+
+/* Apertura y cierre suaves de los menús desplegables. */
+.app-navbar .dropdown-menu {
+  display: block;
+  z-index: 1081;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+}
+
+.app-navbar .dropdown-menu.show {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+
 /* ==========================================================================
    4. MENÚ LATERAL (SIDEBAR)
    ========================================================================== */
@@ -881,6 +975,46 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
     margin-top: 0.5rem;
   }
 
+  /* En móvil, la navegación entra desde el borde derecho como panel lateral. */
+  .app-navbar-menu {
+    width: min(86vw, 330px);
+    background-color: var(--uab-azul);
+    border-left: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: -10px 0 28px rgba(8, 35, 61, 0.28);
+  }
+
+  .app-navbar-menu .offcanvas-body {
+    overflow-y: auto;
+  }
+
+  .app-navbar-menu .navbar-nav {
+    padding: 0.75rem 0.85rem 1rem;
+  }
+
+  .app-navbar-menu .nav-link,
+  .app-navbar-menu .app-profile-toggle {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 0.7rem 0.75rem !important;
+    text-align: left;
+  }
+
+  .app-navbar-menu .dropdown-menu {
+    position: static !important;
+    float: none;
+    margin: 0.2rem 0 0.35rem;
+    border-radius: 8px;
+    transform: translateY(-4px);
+  }
+
+  .app-navbar-menu .dropdown-menu:not(.show) {
+    display: none;
+  }
+
+  .app-navbar-menu .dropdown-menu.show {
+    display: block;
+  }
+
   /* ==========================================================================
    VISTA: PERFIL DE USUARIO
    ========================================================================== */
@@ -986,6 +1120,69 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
     padding: 2rem;
   }
 
+}
+
+/* El formulario es el hijo directo del modal y debe participar en su altura desplazable. */
+#modalNuevoEvento .modal-content > form,
+#modalEditarEvento .modal-content > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+#modalNuevoEvento .modal-body,
+#modalEditarEvento .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+#modalNuevoEvento .modal-footer,
+#modalEditarEvento .modal-footer {
+  flex: 0 0 auto;
+}
+
+/* Formularios de eventos: el contenido del modal debe desplazarse en móvil. */
+@media (max-width: 767.98px) {
+  #modalNuevoEvento .modal-dialog,
+  #modalEditarEvento .modal-dialog {
+    width: calc(100% - 1rem);
+    max-width: none;
+    height: calc(100dvh - 1rem);
+    margin: 0.5rem auto;
+  }
+
+  #modalNuevoEvento .modal-content,
+  #modalEditarEvento .modal-content {
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+
+  /* El formulario envuelve header, body y footer; por eso también requiere flex. */
+  #modalNuevoEvento .modal-content > form,
+  #modalEditarEvento .modal-content > form {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+  }
+
+  #modalNuevoEvento .modal-body,
+  #modalEditarEvento .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  #modalNuevoEvento .modal-footer,
+  #modalEditarEvento .modal-footer {
+    flex: 0 0 auto;
+  }
 }
 /* =========================================================
    REGISTRO - MÓVIL

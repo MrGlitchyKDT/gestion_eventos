@@ -56,16 +56,20 @@ $porcentajeOcupacion = ($evento['cupo_maximo'] > 0) ? min(100, round(($evento['t
         <?php endif; ?>
 
         <!-- Materiales de Apoyo (RF-28) -->
-        <?php if (!empty($materiales)): ?>
+        <?php if (!empty($materiales) && $puedeDescargarMateriales): ?>
           <h2 class="h5 fw-bold text-uab-azul mt-3 mb-3"><i class="bi bi-folder2-open me-2"></i>Materiales Descargables</h2>
           <div class="d-flex flex-wrap gap-2">
             <?php foreach ($materiales as $mat): ?>
-              <a href="<?= htmlspecialchars($mat['ruta_archivo']) ?>" target="_blank" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2">
+              <a href="index.php?action=descargar_material&id=<?= (int)$mat['id_material'] ?>" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2">
                 <i class="bi bi-file-earmark-arrow-down text-uab-azul"></i>
                 <span><?= htmlspecialchars($mat['titulo']) ?></span>
                 <span class="badge bg-light text-dark border"><?= $mat['tipo_archivo'] ?></span>
               </a>
             <?php endforeach; ?>
+          </div>
+        <?php elseif (!empty($materiales) && AuthHelper::estaAutenticado()): ?>
+          <div class="alert alert-light border small mt-3 mb-0">
+            <i class="bi bi-lock me-1"></i>Los materiales están disponibles para participantes inscritos en este evento.
           </div>
         <?php endif; ?>
       </div>

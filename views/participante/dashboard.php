@@ -10,14 +10,7 @@ require_once __DIR__ . '/../layouts/navbar.php';
 <!-- Contenedor amplio sin márgenes vacíos excesivos -->
 <main class="container-fluid px-3 px-md-4 py-3">
   <div class="row g-3 align-items-start">
-    
-    <!-- Menú Lateral Compacto -->
-    <aside class="col-12 col-lg-3 col-xl-2">
-      <?php require_once __DIR__ . '/../layouts/sidebar.php'; ?>
-    </aside>
-
-    <!-- Área de Contenido Principal -->
-    <section class="col-12 col-lg-9 col-xl-10">
+    <section class="col-12">
       
       <!-- Banner Compacto Institucional -->
       <div class="dashboard-hero rounded-3 p-4 mb-4 text-white shadow-sm position-relative overflow-hidden">

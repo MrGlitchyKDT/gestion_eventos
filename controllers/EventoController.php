@@ -75,6 +75,13 @@ class EventoController {
             $estaInscrito = (bool)$stmt->fetch();
         }
 
+        $puedeDescargarMateriales = false;
+        if (AuthHelper::estaAutenticado()) {
+            $usuario = AuthHelper::obtenerUsuario();
+            $puedeDescargarMateriales = strtoupper((string)$usuario['rol_nombre']) === 'ADMINISTRADOR'
+                || $this->materialModel->usuarioPuedeDescargar($id_evento, (int)$usuario['id_usuario']);
+        }
+
         require_once __DIR__ . '/../views/publico/detalle_evento.php';
     }
 
@@ -146,7 +153,14 @@ class EventoController {
             exit();
         }
 
+        if (!AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar el registro del evento. Intente nuevamente.';
+            header('Location: index.php?action=admin_eventos');
+            exit();
+        }
+
         $admin = AuthHelper::obtenerUsuario();
+        $idEvento = null;
 
         try {
             $datos = [
@@ -171,6 +185,11 @@ class EventoController {
             ];
 
             $idEvento = $this->eventoModel->crear($datos);
+            $cantidadMateriales = $this->materialModel->subirMultiples(
+                $idEvento,
+                (int)$admin['id_usuario'],
+                $_FILES['materiales'] ?? []
+            );
 
             // Registro de Auditoría (RF-70)
             Auditoria::registrar(
@@ -180,14 +199,293 @@ class EventoController {
                 "Se creó el evento ID #{$idEvento} con código {$datos['codigo']}"
             );
 
-            $_SESSION['success'] = "Evento registrado exitosamente en estado BORRADOR.";
-            header("Location: index.php?action=admin_evento_editar&id={$idEvento}");
+            $_SESSION['success'] = "Evento registrado exitosamente en estado BORRADOR."
+                . ($cantidadMateriales ? " Se adjuntaron {$cantidadMateriales} archivo(s)." : '');
+            header('Location: index.php?action=admin_eventos');
             exit();
         } catch (Exception $e) {
-            $_SESSION['error'] = "Error al crear el evento: " . $e->getMessage();
+            $_SESSION['error'] = $idEvento
+                ? 'El evento fue registrado, pero no se pudieron adjuntar los archivos: ' . $e->getMessage() . ' Puede agregarlos al editarlo.'
+                : 'Error al crear el evento: ' . $e->getMessage();
             header('Location: index.php?action=admin_eventos');
             exit();
         }
+    }
+
+    /** RF-30: Actualiza un evento desde la ventana de edición administrativa. */
+    public function adminActualizarEvento(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: index.php?action=admin_eventos');
+            exit();
+        }
+
+        $idEvento = filter_input(INPUT_POST, 'id_evento', FILTER_VALIDATE_INT);
+        if (!$idEvento || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar la edición del evento. Intente nuevamente.';
+            header('Location: index.php?action=admin_eventos');
+            exit();
+        }
+
+        $admin = AuthHelper::obtenerUsuario();
+        $eventoActual = $this->eventoModel->obtenerDetalle($idEvento);
+        if (!$eventoActual) {
+            $_SESSION['error'] = 'El evento que desea editar ya no existe.';
+            header('Location: index.php?action=admin_eventos');
+            exit();
+        }
+
+        $eventoActualizado = false;
+        try {
+            $modalidad = strtoupper(trim($_POST['modalidad'] ?? ''));
+            if (!in_array($modalidad, ['PRESENCIAL', 'VIRTUAL', 'HIBRIDA'], true)) {
+                throw new InvalidArgumentException('La modalidad del evento no es válida.');
+            }
+
+            $datos = [
+                'titulo' => trim($_POST['titulo'] ?? ''),
+                'descripcion' => trim($_POST['descripcion'] ?? ''),
+                'id_tipo_evento' => (int)($_POST['id_tipo_evento'] ?? 0),
+                'id_categoria' => (int)($_POST['id_categoria'] ?? 0),
+                'modalidad' => $modalidad,
+                'lugar' => trim($_POST['lugar'] ?? ''),
+                'enlace_virtual' => trim($_POST['enlace_virtual'] ?? ''),
+                'cupo_maximo' => (int)($_POST['cupo_maximo'] ?? -1),
+                'fecha_inicio_inscripcion' => str_replace('T', ' ', trim($_POST['fecha_inicio_inscripcion'] ?? '')),
+                'fecha_fin_inscripcion' => str_replace('T', ' ', trim($_POST['fecha_fin_inscripcion'] ?? '')),
+                'fecha_inicio' => trim($_POST['fecha_inicio'] ?? ''),
+                'fecha_fin' => trim($_POST['fecha_fin'] ?? ''),
+                'emite_certificado' => isset($_POST['emite_certificado']) ? 1 : 0,
+                'horas_academicas' => (int)($_POST['horas_academicas'] ?? 0),
+                'porcentaje_asistencia_minimo' => (float)($_POST['porcentaje_asistencia_minimo'] ?? -1),
+                'nota_minima_aprobacion' => (float)$eventoActual['nota_minima_aprobacion'],
+            ];
+
+            if ($datos['titulo'] === '' || $datos['descripcion'] === '' || $datos['id_tipo_evento'] < 1
+                || $datos['id_categoria'] < 1 || $datos['cupo_maximo'] < 0 || $datos['horas_academicas'] < 1
+                || $datos['porcentaje_asistencia_minimo'] < 0 || $datos['porcentaje_asistencia_minimo'] > 100
+                || !$datos['fecha_inicio_inscripcion'] || !$datos['fecha_fin_inscripcion']
+                || !$datos['fecha_inicio'] || !$datos['fecha_fin']) {
+                throw new InvalidArgumentException('Revise los campos obligatorios y los valores numéricos.');
+            }
+
+            $this->eventoModel->actualizar($idEvento, $datos);
+            $eventoActualizado = true;
+            $cantidadMateriales = $this->materialModel->subirMultiples(
+                $idEvento,
+                (int)$admin['id_usuario'],
+                $_FILES['materiales'] ?? []
+            );
+            Auditoria::registrar(
+                (int)$admin['id_usuario'],
+                'ACTUALIZAR_EVENTO',
+                'EVENTOS',
+                "Se actualizó el evento ID #{$idEvento} con código {$eventoActual['codigo']}"
+            );
+            $_SESSION['success'] = 'Evento actualizado correctamente.'
+                . ($cantidadMateriales ? " Se adjuntaron {$cantidadMateriales} archivo(s)." : '');
+        } catch (Exception $e) {
+            $_SESSION['error'] = $eventoActualizado
+                ? 'El evento se actualizó, pero no se pudieron adjuntar los archivos: ' . $e->getMessage() . ' Puede intentarlo nuevamente.'
+                : 'No se pudo actualizar el evento: ' . $e->getMessage();
+        }
+
+        header('Location: index.php?action=admin_eventos');
+        exit();
+    }
+
+    /** Asigna o actualiza la función de un expositor activo en un evento. */
+    public function adminAsignarExpositor(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar la asignación del expositor.';
+            header('Location: index.php?action=admin_eventos');
+            exit();
+        }
+
+        $idEvento = filter_input(INPUT_POST, 'id_evento', FILTER_VALIDATE_INT);
+        $idUsuario = filter_input(INPUT_POST, 'id_usuario', FILTER_VALIDATE_INT);
+        $rolExpositor = mb_substr(trim($_POST['rol_expositor'] ?? 'Expositor Principal'), 0, 100);
+        $admin = AuthHelper::obtenerUsuario();
+
+        try {
+            if (!$idEvento || !$idUsuario || $rolExpositor === '' || !$this->eventoModel->obtenerDetalle($idEvento)) {
+                throw new InvalidArgumentException('Revise el evento, expositor y función seleccionados.');
+            }
+
+            $db = Database::getConnection();
+            $stmt = $db->prepare("SELECT u.nombres, u.apellidos FROM usuarios u INNER JOIN roles r ON r.id_rol = u.id_rol WHERE u.id_usuario = :usuario AND u.activo = 1 AND r.nombre = 'EXPOSITOR' LIMIT 1");
+            $stmt->execute([':usuario' => $idUsuario]);
+            $expositor = $stmt->fetch();
+            if (!$expositor) {
+                throw new InvalidArgumentException('El usuario seleccionado no es un expositor activo.');
+            }
+
+            $this->eventoModel->asignarExpositor($idEvento, $idUsuario, $rolExpositor);
+            Auditoria::registrar(
+                (int)$admin['id_usuario'],
+                'ASIGNAR_EXPOSITOR_EVENTO',
+                'EVENTO_EXPOSITORES',
+                "Se asignó a {$expositor['nombres']} {$expositor['apellidos']} al evento #{$idEvento} como {$rolExpositor}"
+            );
+            $_SESSION['success'] = 'Expositor asignado correctamente.';
+        } catch (Exception $e) {
+            $_SESSION['error'] = 'No se pudo asignar el expositor: ' . $e->getMessage();
+        }
+        header('Location: index.php?action=admin_eventos');
+        exit();
+    }
+
+    /** Retira la asignación de un expositor de un evento. */
+    public function adminDesasignarExpositor(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        $idEvento = filter_input(INPUT_POST, 'id_evento', FILTER_VALIDATE_INT);
+        $idUsuario = filter_input(INPUT_POST, 'id_usuario', FILTER_VALIDATE_INT);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !$idEvento || !$idUsuario || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar el retiro del expositor.';
+        } elseif ($this->eventoModel->desasignarExpositor($idEvento, $idUsuario)) {
+            $admin = AuthHelper::obtenerUsuario();
+            Auditoria::registrar(
+                (int)$admin['id_usuario'],
+                'DESASIGNAR_EXPOSITOR_EVENTO',
+                'EVENTO_EXPOSITORES',
+                "Se retiró al usuario #{$idUsuario} del evento #{$idEvento}"
+            );
+            $_SESSION['success'] = 'Expositor retirado del evento correctamente.';
+        } else {
+            $_SESSION['error'] = 'No se encontró la asignación solicitada.';
+        }
+        header('Location: index.php?action=admin_eventos');
+        exit();
+    }
+
+    /** Registra una sesión en el cronograma de un evento. */
+    public function adminCrearSesion(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar el registro de la sesión.';
+            header('Location: index.php?action=admin_eventos');
+            exit();
+        }
+
+        $idEvento = filter_input(INPUT_POST, 'id_evento', FILTER_VALIDATE_INT);
+        $datos = [
+            'id_evento' => $idEvento,
+            'titulo' => mb_substr(trim($_POST['titulo'] ?? ''), 0, 150),
+            'fecha' => trim($_POST['fecha'] ?? ''),
+            'hora_inicio' => trim($_POST['hora_inicio'] ?? ''),
+            'hora_fin' => trim($_POST['hora_fin'] ?? ''),
+            'lugar_especifico' => mb_substr(trim($_POST['lugar_especifico'] ?? ''), 0, 200),
+        ];
+
+        try {
+            $evento = $idEvento ? $this->eventoModel->obtenerDetalle($idEvento) : null;
+            if (!$evento || $datos['titulo'] === ''
+                || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $datos['fecha'])
+                || !preg_match('/^\d{2}:\d{2}$/', $datos['hora_inicio'])
+                || !preg_match('/^\d{2}:\d{2}$/', $datos['hora_fin'])
+                || $datos['hora_inicio'] >= $datos['hora_fin']) {
+                throw new InvalidArgumentException('Revise título, fecha y horarios de la sesión.');
+            }
+            if ($datos['fecha'] < $evento['fecha_inicio'] || $datos['fecha'] > $evento['fecha_fin']) {
+                throw new InvalidArgumentException('La fecha de la sesión debe estar dentro del periodo del evento.');
+            }
+
+            $idSesion = $this->sesionModel->crear($datos);
+            $admin = AuthHelper::obtenerUsuario();
+            Auditoria::registrar(
+                (int)$admin['id_usuario'],
+                'CREAR_SESION_EVENTO',
+                'SESIONES_EVENTO',
+                "Se registró la sesión #{$idSesion} para el evento #{$idEvento}"
+            );
+            $_SESSION['success'] = 'Sesión agregada al cronograma correctamente.';
+        } catch (Exception $e) {
+            $_SESSION['error'] = 'No se pudo registrar la sesión: ' . $e->getMessage();
+        }
+        header('Location: index.php?action=admin_eventos');
+        exit();
+    }
+
+    /** Elimina una sesión que no cuente con dependencias que impidan retirarla. */
+    public function adminEliminarSesion(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        $idSesion = filter_input(INPUT_POST, 'id_sesion', FILTER_VALIDATE_INT);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !$idSesion || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar la eliminación de la sesión.';
+        } else {
+            try {
+                $sesion = $this->sesionModel->obtenerPorId($idSesion);
+                if (!$sesion) {
+                    throw new InvalidArgumentException('La sesión ya no existe.');
+                }
+                $this->sesionModel->eliminar($idSesion);
+                $admin = AuthHelper::obtenerUsuario();
+                Auditoria::registrar(
+                    (int)$admin['id_usuario'],
+                    'ELIMINAR_SESION_EVENTO',
+                    'SESIONES_EVENTO',
+                    "Se eliminó la sesión #{$idSesion} del evento #{$sesion['id_evento']}"
+                );
+                $_SESSION['success'] = 'Sesión eliminada correctamente.';
+            } catch (Exception $e) {
+                $_SESSION['error'] = 'No se pudo eliminar la sesión: ' . $e->getMessage();
+            }
+        }
+        header('Location: index.php?action=admin_eventos');
+        exit();
+    }
+
+    /** Descarga protegida para administración y participantes inscritos al evento. */
+    public function descargarMaterial(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR', 'PARTICIPANTE']);
+        $idMaterial = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+        $material = $idMaterial ? $this->materialModel->obtenerPorId($idMaterial) : null;
+        $usuario = AuthHelper::obtenerUsuario();
+        $esAdmin = strtoupper((string)($usuario['rol_nombre'] ?? '')) === 'ADMINISTRADOR';
+
+        if (!$material || (!$esAdmin && !$this->materialModel->usuarioPuedeDescargar((int)$material['id_evento'], (int)$usuario['id_usuario']))) {
+            http_response_code(403);
+            exit('No tiene acceso a este material.');
+        }
+
+        $ruta = $this->materialModel->rutaFisica($material);
+        if (!is_file($ruta)) {
+            http_response_code(404);
+            exit('El archivo solicitado ya no está disponible.');
+        }
+
+        $nombre = preg_replace('/[\\\\\"\\r\\n]/', '_', $material['titulo']) . '.' . strtolower($material['tipo_archivo']);
+        header('Content-Type: application/octet-stream');
+        header('Content-Length: ' . filesize($ruta));
+        header("Content-Disposition: attachment; filename*=UTF-8''" . rawurlencode($nombre));
+        header('X-Content-Type-Options: nosniff');
+        readfile($ruta);
+        exit();
+    }
+
+    /** Elimina un archivo previamente adjuntado desde la edición administrativa. */
+    public function adminEliminarMaterial(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        $idMaterial = filter_input(INPUT_POST, 'id_material', FILTER_VALIDATE_INT);
+        $material = $idMaterial ? $this->materialModel->obtenerPorId($idMaterial) : null;
+        if (!$idMaterial || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar la eliminación del archivo.';
+        } elseif ($material && $this->materialModel->eliminar($idMaterial)) {
+            $admin = AuthHelper::obtenerUsuario();
+            Auditoria::registrar(
+                (int)$admin['id_usuario'],
+                'ELIMINAR_MATERIAL_EVENTO',
+                'MATERIALES_EVENTO',
+                "Se eliminó el material #{$idMaterial} del evento #{$material['id_evento']}"
+            );
+            $_SESSION['success'] = 'Archivo eliminado correctamente.';
+        } else {
+            $_SESSION['error'] = 'El archivo ya no existe o no pudo eliminarse.';
+        }
+        header('Location: index.php?action=admin_eventos');
+        exit();
     }
 
     /**

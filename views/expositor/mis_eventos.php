@@ -5,17 +5,6 @@ AuthHelper::requerirRol(['EXPOSITOR', 'ADMINISTRADOR']);
 $titulo_pagina = 'Mis Eventos — UAB Eventos';
 $seccion_activa = 'mis_eventos';
 $eventos = $eventos ?? [];
-$usuario = AuthHelper::obtenerUsuario();
-$eventosEnCurso = 0;
-$eventosFinalizados = 0;
-
-foreach ($eventos as $eventoAsignado) {
-    if ($eventoAsignado['estado'] === 'EN_CURSO') {
-        $eventosEnCurso++;
-    } elseif ($eventoAsignado['estado'] === 'FINALIZADO') {
-        $eventosFinalizados++;
-    }
-}
 
 $escapar = static fn($valor): string => htmlspecialchars((string)$valor, ENT_QUOTES, 'UTF-8');
 $formatearFecha = static function (?string $fecha): string {
@@ -34,50 +23,14 @@ require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/navbar.php';
 ?>
 
-<main class="container-fluid px-3 px-md-4 py-3">
-  <div class="row g-3">
-    <aside class="col-12 col-lg-3 col-xl-2">
-      <?php require_once __DIR__ . '/../layouts/sidebar.php'; ?>
-    </aside>
-
-    <section class="col-12 col-lg-9 col-xl-10" aria-labelledby="titulo-mis-eventos">
-      <div class="hero-uab rounded-3 p-4 p-md-5 mb-4 shadow-sm">
-        <span class="badge bg-white text-uab-azul mb-3">Panel de expositor</span>
-        <h1 id="titulo-mis-eventos" class="h3 fw-bold mb-2">Mis eventos asignados</h1>
-        <p class="mb-0">
-          Bienvenido/a, <?= $escapar($usuario['nombres'] . ' ' . $usuario['apellidos']) ?>.
-          Consulta las fechas y los detalles de los eventos en los que participas como expositor.
-        </p>
-      </div>
-
-      <div class="row g-3 mb-4">
-        <div class="col-12 col-sm-4">
-          <div class="card stat-card border-0 shadow-sm h-100">
-            <div class="card-body">
-              <i class="bi bi-calendar-event text-uab-azul fs-4" aria-hidden="true"></i>
-              <div class="stat-num"><?= count($eventos) ?></div>
-              <div class="small text-muted">Eventos asignados</div>
-            </div>
-          </div>
+<main class="container-fluid px-3 px-md-4 py-4">
+  <section aria-labelledby="titulo-mis-eventos">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <div>
+          <h1 id="titulo-mis-eventos" class="h3 fw-bold text-uab-azul mb-1">Mis eventos</h1>
+          <p class="small text-muted mb-0">Eventos en los que tiene asignada una función como expositor.</p>
         </div>
-        <div class="col-6 col-sm-4">
-          <div class="card stat-card border-0 shadow-sm h-100">
-            <div class="card-body">
-              <i class="bi bi-play-circle text-uab-azul fs-4" aria-hidden="true"></i>
-              <div class="stat-num"><?= $eventosEnCurso ?></div>
-              <div class="small text-muted">En curso</div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-sm-4">
-          <div class="card stat-card stat-green border-0 shadow-sm h-100">
-            <div class="card-body">
-              <i class="bi bi-check-circle text-uab-verde fs-4" aria-hidden="true"></i>
-              <div class="stat-num"><?= $eventosFinalizados ?></div>
-              <div class="small text-muted">Finalizados</div>
-            </div>
-          </div>
-        </div>
+        <a class="btn btn-uab-azul btn-sm" href="index.php?action=expositor_asistencia"><i class="bi bi-clipboard-check me-1"></i> Tomar asistencia</a>
       </div>
 
       <?php if (empty($eventos)): ?>
@@ -127,6 +80,9 @@ require_once __DIR__ . '/../layouts/navbar.php';
                     <?php endif; ?>
                   </dl>
                   <div class="mt-auto">
+                    <a class="btn btn-sm btn-uab-azul" href="index.php?action=expositor_asistencia&amp;id_evento=<?= (int)$eventoAsignado['id_evento'] ?>">
+                      <i class="bi bi-clipboard-check me-1" aria-hidden="true"></i> Tomar asistencia
+                    </a>
                     <a class="btn btn-sm btn-outline-primary" href="index.php?action=detalle_evento&amp;id=<?= (int)$eventoAsignado['id_evento'] ?>">
                       <i class="bi bi-eye me-1" aria-hidden="true"></i> Ver detalle del evento
                     </a>
@@ -137,8 +93,7 @@ require_once __DIR__ . '/../layouts/navbar.php';
           <?php endforeach; ?>
         </div>
       <?php endif; ?>
-    </section>
-  </div>
+  </section>
 </main>
 
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>

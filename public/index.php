@@ -178,6 +178,11 @@ switch ($action) {
         (new ExpositorController())->guardarAsistenciaApi();
         break;
 
+    case 'expositor_exportar_asistencia':
+        require_once __DIR__ . '/../controllers/ExpositorController.php';
+        (new ExpositorController())->exportarAsistencia();
+        break;
+
     // ==========================================
     // ADMINISTRACIÓN CENTRAL (RF-29 a RF-70)
     // ==========================================
@@ -190,11 +195,17 @@ switch ($action) {
         AuthHelper::requerirRol(['ADMINISTRADOR']);
         require_once __DIR__ . '/../models/Evento.php';
         $eventoModel = new Evento();
-        $eventos = $eventoModel->listarPublicos();
+        $eventos = $eventoModel->listarParaAdministracion();
+        $expositoresPorEvento = $eventoModel->listarExpositoresAgrupadosPorEventos(array_column($eventos, 'id_evento'));
+        require_once __DIR__ . '/../models/SesionEvento.php';
+        $sesionesPorEvento = (new SesionEvento())->listarAgrupadasPorEventos(array_column($eventos, 'id_evento'));
+        require_once __DIR__ . '/../models/Material.php';
+        $materialesPorEvento = (new Material())->listarAgrupadosPorEventos(array_column($eventos, 'id_evento'));
         $db = Database::getConnection();
         $tipos = $db->query("SELECT * FROM tipos_evento WHERE activo = 1")->fetchAll();
         $categorias = $db->query("SELECT * FROM categorias WHERE activo = 1")->fetchAll();
         $usuarios_participantes = $db->query("SELECT id_usuario, nombres, apellidos, ci FROM usuarios WHERE activo = 1 ORDER BY apellidos ASC")->fetchAll();
+        $usuarios_expositores = $db->query("SELECT u.id_usuario, u.nombres, u.apellidos, u.correo FROM usuarios u INNER JOIN roles r ON r.id_rol = u.id_rol WHERE u.activo = 1 AND r.nombre = 'EXPOSITOR' ORDER BY u.apellidos ASC, u.nombres ASC")->fetchAll();
         require_once __DIR__ . '/../views/admin/eventos/index.php';
         break;
 
@@ -207,6 +218,45 @@ switch ($action) {
         require_once __DIR__ . '/../controllers/EventoController.php';
         (new EventoController())->adminCambiarEstado();
         break;
+
+    case 'admin_evento_actualizar':
+        require_once __DIR__ . '/../controllers/EventoController.php';
+        (new EventoController())->adminActualizarEvento();
+        break;
+
+    case 'admin_evento_asignar_expositor':
+        require_once __DIR__ . '/../controllers/EventoController.php';
+        (new EventoController())->adminAsignarExpositor();
+        break;
+
+    case 'admin_evento_desasignar_expositor':
+        require_once __DIR__ . '/../controllers/EventoController.php';
+        (new EventoController())->adminDesasignarExpositor();
+        break;
+
+    case 'admin_evento_crear_sesion':
+        require_once __DIR__ . '/../controllers/EventoController.php';
+        (new EventoController())->adminCrearSesion();
+        break;
+
+    case 'admin_evento_eliminar_sesion':
+        require_once __DIR__ . '/../controllers/EventoController.php';
+        (new EventoController())->adminEliminarSesion();
+        break;
+
+    case 'descargar_material':
+        require_once __DIR__ . '/../controllers/EventoController.php';
+        (new EventoController())->descargarMaterial();
+        break;
+
+    case 'admin_material_eliminar':
+        require_once __DIR__ . '/../controllers/EventoController.php';
+        (new EventoController())->adminEliminarMaterial();
+        break;
+
+    case 'admin_evento_editar':
+        header('Location: index.php?action=admin_eventos', true, 303);
+        exit();
 
     case 'admin_inscribir_manual':
         require_once __DIR__ . '/../controllers/AdminController.php';

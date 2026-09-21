@@ -16,6 +16,7 @@ $baseUrl = rtrim(
     str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])),
     '/'
 );
+$stylesVersion = @filemtime(__DIR__ . '/../../public/assets/css/styles.css') ?: time();
 ?>
 
 <!DOCTYPE html>
@@ -50,7 +51,7 @@ $baseUrl = rtrim(
 
   <!-- CSS del proyecto -->
   <link
-    href="<?= htmlspecialchars($baseUrl) ?>/assets/css/styles.css"
+    href="<?= htmlspecialchars($baseUrl) ?>/assets/css/styles.css?v=<?= (int)$stylesVersion ?>"
     rel="stylesheet"
   >
 </head>

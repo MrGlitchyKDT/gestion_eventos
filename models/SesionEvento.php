@@ -68,6 +68,23 @@ class SesionEvento {
         return $stmt->fetchAll();
     }
 
+    /** Lista sesiones de varios eventos, agrupadas para la gestión administrativa. */
+    public function listarAgrupadasPorEventos(array $idsEventos): array {
+        $idsEventos = array_values(array_unique(array_filter(array_map('intval', $idsEventos))));
+        if ($idsEventos === []) {
+            return [];
+        }
+
+        $marcadores = implode(',', array_fill(0, count($idsEventos), '?'));
+        $stmt = $this->db->prepare("SELECT * FROM sesiones_evento WHERE id_evento IN ({$marcadores}) ORDER BY fecha ASC, hora_inicio ASC");
+        $stmt->execute($idsEventos);
+        $resultado = [];
+        foreach ($stmt->fetchAll() as $sesion) {
+            $resultado[(int)$sesion['id_evento']][] = $sesion;
+        }
+        return $resultado;
+    }
+
     public function obtenerPorId(int $id_sesion): ?array {
         $sql = "SELECT se.*, e.titulo AS evento_titulo, e.estado AS evento_estado
                 FROM sesiones_evento se
