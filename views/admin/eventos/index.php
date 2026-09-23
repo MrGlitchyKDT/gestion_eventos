@@ -78,6 +78,9 @@ require_once __DIR__ . '/../../layouts/navbar.php';
                     <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalInscripcionManual" onclick="prepararInscripcionManual(<?= $ev['id_evento'] ?>, '<?= htmlspecialchars(addslashes($ev['titulo'])) ?>')">
                       <i class="bi bi-person-plus"></i>
                     </button>
+                    <a class="btn btn-sm btn-outline-danger" href="index.php?action=admin_certificados&id_evento=<?= $ev['id_evento'] ?>" title="Emitir certificados">
+                      <i class="bi bi-award"></i>
+                    </a>
                     <?php
                     $datosEdicion = htmlspecialchars(json_encode([
                         'id_evento' => (int)$ev['id_evento'],

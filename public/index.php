@@ -155,6 +155,11 @@ switch ($action) {
         (new CertificadoController())->procesarSolicitudReimpresion();
         break;
 
+    case 'descargar_certificado':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->descargarPdf();
+        break;
+
     // ==========================================
     // EXPOSITOR: GESTIÓN Y ASISTENCIA (RF-20 a RF-26)
     // ==========================================
@@ -207,6 +212,36 @@ switch ($action) {
         $usuarios_participantes = $db->query("SELECT id_usuario, nombres, apellidos, ci FROM usuarios WHERE activo = 1 ORDER BY apellidos ASC")->fetchAll();
         $usuarios_expositores = $db->query("SELECT u.id_usuario, u.nombres, u.apellidos, u.correo FROM usuarios u INNER JOIN roles r ON r.id_rol = u.id_rol WHERE u.activo = 1 AND r.nombre = 'EXPOSITOR' ORDER BY u.apellidos ASC, u.nombres ASC")->fetchAll();
         require_once __DIR__ . '/../views/admin/eventos/index.php';
+        break;
+
+    case 'admin_certificados':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminGestion();
+        break;
+
+    case 'admin_plantilla_certificado_guardar':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminSubirPlantilla();
+        break;
+
+    case 'admin_plantilla_certificado_diseno':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminGuardarDiseno();
+        break;
+
+    case 'admin_plantilla_certificado_ver':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->verPlantilla();
+        break;
+
+    case 'admin_certificado_emitir_pdf':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminEmitirPdf();
+        break;
+
+    case 'admin_certificado_regenerar_pdf':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminRegenerarPdf();
         break;
 
     case 'admin_eventos_guardar':

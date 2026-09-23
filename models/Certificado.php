@@ -193,6 +193,30 @@ class Certificado {
         return $stmt->fetchAll();
     }
 
+    public function obtenerPorId(int $idCertificado): ?array {
+        $stmt = $this->db->prepare("SELECT c.*, u.ci, u.nombres, u.apellidos, e.titulo AS evento_titulo, e.horas_academicas, e.fecha_inicio, e.fecha_fin FROM certificados c INNER JOIN usuarios u ON u.id_usuario=c.id_usuario INNER JOIN eventos e ON e.id_evento=c.id_evento WHERE c.id_certificado = :id LIMIT 1");
+        $stmt->execute([':id' => $idCertificado]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public function listarHabilitadosPorEvento(int $idEvento): array {
+        $sql = "SELECT i.id_inscripcion, i.porcentaje_asistencia, i.calificacion_final, u.ci, u.nombres, u.apellidos, u.correo
+                FROM inscripciones i INNER JOIN usuarios u ON u.id_usuario=i.id_usuario
+                LEFT JOIN certificados c ON c.id_inscripcion=i.id_inscripcion AND c.estado='EMITIDO'
+                WHERE i.id_evento=:evento AND i.estado IN ('INSCRITO','ASISTIO','APROBADO') AND i.habilitado_certificado=1 AND c.id_certificado IS NULL
+                ORDER BY u.apellidos, u.nombres";
+        $stmt = $this->db->prepare($sql); $stmt->execute([':evento'=>$idEvento]); return $stmt->fetchAll();
+    }
+
+    public function actualizarDocumento(int $idCertificado, string $ruta, string $codigoQr): void {
+        $stmt = $this->db->prepare('UPDATE certificados SET ruta_archivo_pdf=:ruta, codigo_qr=:qr WHERE id_certificado=:id');
+        $stmt->execute([':ruta'=>$ruta, ':qr'=>$codigoQr, ':id'=>$idCertificado]);
+    }
+
+    public function eliminarRecienEmitido(int $idCertificado): void {
+        $this->db->prepare('DELETE FROM certificados WHERE id_certificado = :id')->execute([':id'=>$idCertificado]);
+    }
+
     /**
      * RF-59: Anulación administrativa de certificado con motivo de auditoría
      */

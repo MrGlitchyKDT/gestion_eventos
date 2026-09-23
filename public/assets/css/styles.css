@@ -194,6 +194,12 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
   transform: translateY(0);
 }
 
+/* Editor de posiciones para las plantillas de certificados. */
+.cert-editor-canvas { position: relative; width: 100%; aspect-ratio: 297 / 210; background: #e5e7eb; overflow: hidden; border: 1px solid var(--uab-border); }
+.cert-editor-pdf { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; background: #fff; }
+.cert-editor-field { position: absolute; z-index: 2; transform: translate(-50%, -50%); cursor: grab; touch-action: none; border: 1px dashed #0d6efd; border-radius: 4px; background: rgba(255,255,255,.88); color: #0b3d7a; font-size: .72rem; font-weight: 700; padding: .18rem .35rem; }
+.cert-editor-field:active { cursor: grabbing; background: #dbeafe; }
+
 /* Lista administrativa de eventos: lectura y acciones más cómodas. */
 .tabla-eventos-admin thead th {
   font-size: 1rem;

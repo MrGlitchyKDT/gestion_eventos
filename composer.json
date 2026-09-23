@@ -1,0 +1,8 @@
+{
+  "name": "uab/gestion-eventos",
+  "description": "Sistema de gestión de eventos académicos y certificaciones.",
+  "require": {
+    "setasign/fpdf": "*",
+    "setasign/fpdi": "*"
+  }
+}
