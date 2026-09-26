@@ -87,6 +87,13 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
 .uab-logo-lg   { width: 56px; height: 56px; font-size: 1.4rem; }
 .uab-logo-dark { background-color: var(--uab-azul); color: #fff; }
 
+.app-brand-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
 /* ==========================================================================
    3. BARRA DE NAVEGACIÓN (NAVBAR)
    ========================================================================== */

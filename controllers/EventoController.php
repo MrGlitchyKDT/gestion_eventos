@@ -2,7 +2,9 @@
 // controllers/EventoController.php
 require_once __DIR__ . '/../models/Evento.php';
 require_once __DIR__ . '/../models/SesionEvento.php';
+require_once __DIR__ . '/../models/SerieSesionEvento.php';
 require_once __DIR__ . '/../models/Inscripcion.php';
+require_once __DIR__ . '/../models/Asistencia.php';
 require_once __DIR__ . '/../models/Material.php';
 require_once __DIR__ . '/../models/Auditoria.php';
 require_once __DIR__ . '/../helpers/AuthHelper.php';
@@ -10,13 +12,17 @@ require_once __DIR__ . '/../helpers/AuthHelper.php';
 class EventoController {
     private Evento $eventoModel;
     private SesionEvento $sesionModel;
+    private SerieSesionEvento $serieSesionModel;
     private Inscripcion $inscripcionModel;
+    private Asistencia $asistenciaModel;
     private Material $materialModel;
 
     public function __construct() {
         $this->eventoModel = new Evento();
         $this->sesionModel = new SesionEvento();
+        $this->serieSesionModel = new SerieSesionEvento();
         $this->inscripcionModel = new Inscripcion();
+        $this->asistenciaModel = new Asistencia();
         $this->materialModel = new Material();
     }
 
@@ -30,6 +36,7 @@ class EventoController {
             'buscar'         => $_GET['buscar'] ?? '',
             'id_tipo_evento' => $_GET['id_tipo_evento'] ?? '',
             'id_categoria'   => $_GET['id_categoria'] ?? '',
+            'estado'         => $_GET['estado'] ?? '',
             'fecha'          => $_GET['fecha'] ?? ''
         ];
 
@@ -210,6 +217,36 @@ class EventoController {
             header('Location: index.php?action=admin_eventos');
             exit();
         }
+    }
+
+    /** Muestra las sesiones cuya autoasistencia está abierta para el participante. */
+    public function miAsistencia(): void {
+        AuthHelper::requerirRol(['PARTICIPANTE', 'ADMINISTRADOR']);
+        $usuario = AuthHelper::obtenerUsuario();
+        $idEvento = filter_input(INPUT_GET, 'id_evento', FILTER_VALIDATE_INT) ?: null;
+        $sesionesAbiertas = $this->asistenciaModel->sesionesAbiertasPorUsuario((int)$usuario['id_usuario'], $idEvento);
+        require_once __DIR__ . '/../views/participante/asistencia.php';
+    }
+
+    /** Registra la presencia que el propio participante confirma durante la ventana autorizada. */
+    public function confirmarAsistencia(): void {
+        AuthHelper::requerirRol(['PARTICIPANTE', 'ADMINISTRADOR']);
+        $idEvento = filter_input(INPUT_POST, 'id_evento', FILTER_VALIDATE_INT);
+        $idSesion = filter_input(INPUT_POST, 'id_sesion', FILTER_VALIDATE_INT);
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null) || !$idSesion) {
+                throw new InvalidArgumentException('La solicitud de asistencia no es válida.');
+            }
+            $usuario = AuthHelper::obtenerUsuario();
+            $this->asistenciaModel->confirmarParticipante($idSesion, (int)$usuario['id_usuario']);
+            $_SESSION['success'] = 'Tu asistencia fue confirmada correctamente.';
+        } catch (Throwable $e) {
+            $_SESSION['error'] = $e->getMessage();
+        }
+        $destino = 'index.php?action=mi_asistencia';
+        if ($idEvento) $destino .= '&id_evento=' . (int)$idEvento;
+        header('Location: ' . $destino, true, 303);
+        exit();
     }
 
     /** RF-30: Actualiza un evento desde la ventana de edición administrativa. */
@@ -408,6 +445,44 @@ class EventoController {
         exit();
     }
 
+    /** Crea o edita una serie recurrente y genera sus sesiones individuales. */
+    public function adminGuardarSerieSesiones(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar el registro de la serie.';
+            header('Location: index.php?action=admin_eventos');
+            exit();
+        }
+
+        $idSerie = filter_input(INPUT_POST, 'id_serie', FILTER_VALIDATE_INT);
+        try {
+            $datos = $this->obtenerDatosSerieSolicitud();
+            $evento = $this->eventoModel->obtenerDetalle((int)$datos['id_evento']);
+            if (!$evento) throw new InvalidArgumentException('El evento seleccionado no existe.');
+            if ($datos['fecha_inicio'] < $evento['fecha_inicio'] || $datos['fecha_fin'] > $evento['fecha_fin']) {
+                throw new InvalidArgumentException('El periodo de la serie debe estar dentro de las fechas del evento.');
+            }
+
+            $admin = AuthHelper::obtenerUsuario();
+            if ($idSerie) {
+                $resultado = $this->serieSesionModel->actualizar((int)$idSerie, $datos);
+                $accion = 'ACTUALIZAR_SERIE_SESIONES';
+                $detalle = "Se actualizó la serie #{$idSerie} y se regeneraron {$resultado['cantidad']} sesiones futuras.";
+                $_SESSION['success'] = "Serie actualizada. Se regeneraron {$resultado['cantidad']} sesiones futuras.";
+            } else {
+                $resultado = $this->serieSesionModel->crear($datos, (int)$admin['id_usuario']);
+                $accion = 'CREAR_SERIE_SESIONES';
+                $detalle = "Se creó la serie #{$resultado['id_serie']} con {$resultado['cantidad']} sesiones.";
+                $_SESSION['success'] = "Serie creada con {$resultado['cantidad']} sesiones programadas.";
+            }
+            Auditoria::registrar((int)$admin['id_usuario'], $accion, 'SERIES_SESIONES_EVENTO', $detalle);
+        } catch (Throwable $e) {
+            $_SESSION['error'] = 'No se pudo guardar la serie: ' . $e->getMessage();
+        }
+        header('Location: index.php?action=admin_eventos');
+        exit();
+    }
+
     /** Elimina una sesión que no cuente con dependencias que impidan retirarla. */
     public function adminEliminarSesion(): void {
         AuthHelper::requerirRol(['ADMINISTRADOR']);
@@ -435,6 +510,49 @@ class EventoController {
         }
         header('Location: index.php?action=admin_eventos');
         exit();
+    }
+
+    private function obtenerDatosSerieSolicitud(): array {
+        $idEvento = filter_input(INPUT_POST, 'id_evento', FILTER_VALIDATE_INT);
+        $titulo = mb_substr(trim($_POST['titulo'] ?? ''), 0, 150);
+        $fechaInicio = trim($_POST['fecha_inicio'] ?? '');
+        $fechaFin = trim($_POST['fecha_fin'] ?? '');
+        $horaInicio = trim($_POST['hora_inicio'] ?? '');
+        $horaFin = trim($_POST['hora_fin'] ?? '');
+        $frecuencia = strtoupper(trim($_POST['frecuencia'] ?? ''));
+        $intervalo = filter_var($_POST['intervalo_recurrencia'] ?? null, FILTER_VALIDATE_INT);
+        $diasRecibidos = is_array($_POST['dias_semana'] ?? null) ? $_POST['dias_semana'] : [];
+        $dias = array_values(array_unique(array_map('intval', $diasRecibidos)));
+        sort($dias);
+
+        if (!$idEvento || $titulo === ''
+            || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio)
+            || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaFin)
+            || $fechaInicio > $fechaFin
+            || !preg_match('/^\d{2}:\d{2}$/', $horaInicio)
+            || !preg_match('/^\d{2}:\d{2}$/', $horaFin)
+            || $horaInicio >= $horaFin
+            || !in_array($frecuencia, ['DIARIA', 'SEMANAL'], true)
+            || !$intervalo || $intervalo < 1 || $intervalo > 30
+            || array_diff($dias, [1, 2, 3, 4, 5, 6, 7])) {
+            throw new InvalidArgumentException('Revise título, periodo, horarios y frecuencia de la serie.');
+        }
+        if ($frecuencia === 'SEMANAL' && $dias === []) {
+            throw new InvalidArgumentException('Seleccione por lo menos un día para la recurrencia semanal.');
+        }
+
+        return [
+            'id_evento' => (int)$idEvento,
+            'titulo' => $titulo,
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+            'hora_inicio' => $horaInicio,
+            'hora_fin' => $horaFin,
+            'lugar_especifico' => mb_substr(trim($_POST['lugar_especifico'] ?? ''), 0, 200),
+            'frecuencia' => $frecuencia,
+            'intervalo_recurrencia' => (int)$intervalo,
+            'dias_semana' => $frecuencia === 'SEMANAL' ? $dias : [],
+        ];
     }
 
     /** Descarga protegida para administración y participantes inscritos al evento. */

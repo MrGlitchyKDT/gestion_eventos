@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../helpers/AuthHelper.php';
 AuthHelper::requerirRol(['ADMINISTRADOR']);
-$titulo_pagina = 'Inicio administrativo — UAB Eventos';
+$titulo_pagina = 'Inicio administrativo — UAB DIE';
 $seccion_activa = 'dashboard';
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/navbar.php';

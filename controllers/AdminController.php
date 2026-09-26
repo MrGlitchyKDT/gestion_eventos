@@ -172,7 +172,7 @@ class AdminController {
         $this->configuracionEventos();
     }
 
-    /** Gestiona tipos y categorías disponibles para los formularios de eventos. */
+    /** Gestiona tipos y áreas disponibles para los formularios de eventos. */
     public function configuracionEventos(): void {
         AuthHelper::requerirRol(['ADMINISTRADOR']);
         $tipos = $this->db->query("SELECT te.*, (SELECT COUNT(*) FROM eventos e WHERE e.id_tipo_evento = te.id_tipo_evento) AS eventos_asociados FROM tipos_evento te ORDER BY te.activo DESC, te.nombre ASC")->fetchAll();
@@ -192,7 +192,7 @@ class AdminController {
         $catalogo = $_POST['catalogo'] ?? '';
         $definiciones = [
             'tipo' => ['tabla' => 'tipos_evento', 'clave' => 'id_tipo_evento', 'etiqueta' => 'Tipo de evento'],
-            'categoria' => ['tabla' => 'categorias', 'clave' => 'id_categoria', 'etiqueta' => 'Categoría'],
+            'categoria' => ['tabla' => 'categorias', 'clave' => 'id_categoria', 'etiqueta' => 'Área'],
         ];
         $definicion = $definiciones[$catalogo] ?? null;
         $nombre = mb_substr(trim($_POST['nombre'] ?? ''), 0, 100);
@@ -230,7 +230,7 @@ class AdminController {
         $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
         $definiciones = [
             'tipo' => ['tabla' => 'tipos_evento', 'clave' => 'id_tipo_evento', 'campo_evento' => 'id_tipo_evento', 'etiqueta' => 'Tipo de evento'],
-            'categoria' => ['tabla' => 'categorias', 'clave' => 'id_categoria', 'campo_evento' => 'id_categoria', 'etiqueta' => 'Categoría'],
+            'categoria' => ['tabla' => 'categorias', 'clave' => 'id_categoria', 'campo_evento' => 'id_categoria', 'etiqueta' => 'Área'],
         ];
         $definicion = $definiciones[$catalogo] ?? null;
 
@@ -271,7 +271,8 @@ class AdminController {
     public function inscribirManual(): void {
         AuthHelper::requerirRol(['ADMINISTRADOR']);
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar la inscripción manual.';
             header('Location: index.php?action=admin_eventos');
             exit();
         }
@@ -290,12 +291,12 @@ class AdminController {
                 "Inscripción manual forzada para el usuario ID #{$id_usuario} en el evento #{$id_evento} (Inscripción #{$idInscripcion})"
             );
 
-            $_SESSION['success'] = "Participante inscrito administrativamente con éxito.";
+            $_SESSION['success'] = 'La inscripción manual se realizó correctamente.';
         } catch (Exception $e) {
             $_SESSION['error'] = "Error en inscripción manual: " . $e->getMessage();
         }
 
-        header("Location: index.php?action=admin_evento_inscritos&id={$id_evento}");
+        header('Location: index.php?action=admin_eventos', true, 303);
         exit();
     }
 

@@ -16,7 +16,7 @@ require_once __DIR__ . '/../layouts/navbar.php';
   <form action="index.php" method="GET" class="row g-3 mb-4 bg-white p-3 rounded-3 shadow-sm border">
     <input type="hidden" name="action" value="catalogo">
     
-    <div class="col-md-3">
+    <div class="col-md-6 col-lg-2">
       <label class="form-label small fw-semibold">Tipo de Evento</label>
       <select name="id_tipo_evento" class="form-select form-select-sm">
         <option value="">Todos los tipos</option>
@@ -28,10 +28,10 @@ require_once __DIR__ . '/../layouts/navbar.php';
       </select>
     </div>
 
-    <div class="col-md-3">
-      <label class="form-label small fw-semibold">Categoría</label>
+    <div class="col-md-6 col-lg-2">
+      <label class="form-label small fw-semibold">Área</label>
       <select name="id_categoria" class="form-select form-select-sm">
-        <option value="">Todas las categorías</option>
+        <option value="">Todas las áreas</option>
         <?php foreach ($categorias as $c): ?>
           <option value="<?= $c['id_categoria'] ?>" <?= (isset($_GET['id_categoria']) && $_GET['id_categoria'] == $c['id_categoria']) ? 'selected' : '' ?>>
             <?= htmlspecialchars($c['nombre']) ?>
@@ -40,12 +40,22 @@ require_once __DIR__ . '/../layouts/navbar.php';
       </select>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-md-6 col-lg-2">
+      <label class="form-label small fw-semibold">Estado</label>
+      <select name="estado" class="form-select form-select-sm">
+        <option value="">Todos los estados</option>
+        <option value="ABIERTO" <?= ($_GET['estado'] ?? '') === 'ABIERTO' ? 'selected' : '' ?>>Abiertos</option>
+        <option value="CERRADO" <?= ($_GET['estado'] ?? '') === 'CERRADO' ? 'selected' : '' ?>>Cerrados</option>
+        <option value="CONCLUIDO" <?= ($_GET['estado'] ?? '') === 'CONCLUIDO' ? 'selected' : '' ?>>Concluidos</option>
+      </select>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
       <label class="form-label small fw-semibold">Buscar por título o descripción</label>
       <input type="search" name="buscar" class="form-control form-control-sm" placeholder="Buscar..." value="<?= htmlspecialchars($_GET['buscar'] ?? '') ?>">
     </div>
 
-    <div class="col-md-2 d-flex align-items-end">
+    <div class="col-lg-2 d-flex align-items-end">
       <button type="submit" class="btn btn-uab-azul btn-sm w-100">
         <i class="bi bi-filter me-1"></i>Filtrar
       </button>
@@ -56,7 +66,7 @@ require_once __DIR__ . '/../layouts/navbar.php';
   <?php if (empty($eventos)): ?>
     <div class="alert alert-info border-0 shadow-sm d-flex align-items-center gap-2">
       <i class="bi bi-info-circle-fill fs-4"></i>
-      <div>No se encontraron eventos activos con los criterios de búsqueda especificados.</div>
+      <div>No se encontraron eventos con los criterios de búsqueda especificados.</div>
     </div>
   <?php else: ?>
     <div class="row g-4">

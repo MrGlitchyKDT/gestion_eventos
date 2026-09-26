@@ -1,5 +1,5 @@
 <?php 
-$titulo_pagina = "Mis Inscripciones — UAB Eventos";
+$titulo_pagina = "Mis Inscripciones — UAB DIE";
 $seccion_activa = "mis_inscripciones";
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/navbar.php'; 
@@ -206,6 +206,12 @@ $promedioAsistencia = !empty($inscripciones) ? round($sumaAsistencias / count($i
                       <a href="index.php?action=detalle_evento&id=<?= $ins['id_evento'] ?>" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-2 fw-semibold" title="Ver programa">
                         Detalles
                       </a>
+
+                      <?php if ($estado === 'INSCRITO'): ?>
+                        <a href="index.php?action=mi_asistencia&id_evento=<?= (int)$ins['id_evento'] ?>" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-2 fw-semibold" title="Confirmar asistencia cuando el docente la abra">
+                          <i class="bi bi-clipboard-check me-1"></i> Asistencia
+                        </a>
+                      <?php endif; ?>
 
                       <!-- Cancelar Inscripción -->
                       <?php if ($estado === 'INSCRITO'): ?>

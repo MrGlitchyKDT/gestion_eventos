@@ -26,28 +26,13 @@ $stylesVersion = @filemtime(__DIR__ . '/../../public/assets/css/styles.css') ?: 
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <title>
-    <?= htmlspecialchars($titulo_pagina ?? 'UAB Eventos — Sistema de Gestión') ?>
+    <?= htmlspecialchars($titulo_pagina ?? 'UAB DIE — Sistema de Gestión') ?>
   </title>
 
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-  <link
-    href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Open+Sans:wght@400;600&display=swap"
-    rel="stylesheet"
-  >
-
-  <!-- Bootstrap -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  >
-
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-    rel="stylesheet"
-  >
+  <!-- Dependencias locales: permiten operar sin CDN. -->
+  <link href="<?= htmlspecialchars($baseUrl) ?>/assets/vendor/fonts/google-fonts.css" rel="stylesheet">
+  <link href="<?= htmlspecialchars($baseUrl) ?>/assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="<?= htmlspecialchars($baseUrl) ?>/assets/vendor/bootstrap-icons/font/bootstrap-icons.min.css" rel="stylesheet">
 
   <!-- CSS del proyecto -->
   <link
@@ -71,14 +56,16 @@ $stylesVersion = @filemtime(__DIR__ . '/../../public/assets/css/styles.css') ?: 
         class="auth-header-brand text-decoration-none"
       >
 
-        <span class="uab-logo">
-          UAB
-        </span>
+        <img
+          src="<?= htmlspecialchars($baseUrl) ?>/assets/img/logo.png"
+          class="app-brand-logo"
+          alt="UAB DIE"
+        >
 
         <div>
 
           <div class="auth-header-title">
-            UAB Eventos
+            UAB DIE
           </div>
 
           <div class="auth-header-subtitle">

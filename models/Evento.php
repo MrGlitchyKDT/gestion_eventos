@@ -119,7 +119,8 @@ class Evento {
      * RF-07 y RF-08: Catálogo de eventos para participantes con búsqueda y filtros
      */
     public function listarPublicos(array $filtros = []): array {
-        $where = ["e.estado = 'PUBLICADO'"];
+        // El catálogo sólo muestra eventos que pueden ser consultados públicamente.
+        $where = ["e.estado IN ('PUBLICADO', 'EN_CURSO', 'FINALIZADO')"];
         $params = [];
 
         if (!empty($filtros['buscar'])) {
@@ -135,6 +136,17 @@ class Evento {
         if (!empty($filtros['id_categoria'])) {
             $where[] = "e.id_categoria = :id_categoria";
             $params[':id_categoria'] = (int)$filtros['id_categoria'];
+        }
+
+        $estadoCatalogo = strtoupper(trim((string)($filtros['estado'] ?? '')));
+        if ($estadoCatalogo === 'ABIERTO') {
+            $where[] = "e.estado = 'PUBLICADO' AND NOW() BETWEEN e.fecha_inicio_inscripcion AND e.fecha_fin_inscripcion";
+        } elseif ($estadoCatalogo === 'CERRADO') {
+            $where[] = "(e.estado = 'EN_CURSO' OR (e.estado = 'PUBLICADO'
+                        AND NOT (NOW() BETWEEN e.fecha_inicio_inscripcion AND e.fecha_fin_inscripcion)))
+                        AND CURDATE() <= e.fecha_fin";
+        } elseif ($estadoCatalogo === 'CONCLUIDO') {
+            $where[] = "(e.estado = 'FINALIZADO' OR CURDATE() > e.fecha_fin)";
         }
 
         if (!empty($filtros['fecha'])) {

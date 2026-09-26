@@ -13,9 +13,9 @@ $inicialNav = $usuarioNav
   <div class="container-xl">
     <!-- Logotipo institucional -->
     <a class="navbar-brand app-navbar-brand d-flex align-items-center gap-3 m-0 text-white" href="index.php?action=<?= htmlspecialchars($inicioNav) ?>" aria-label="Ir al inicio">
-      <span class="uab-logo">UAB</span>
+      <img src="assets/img/logo.png" class="app-brand-logo" alt="UAB DIE">
       <div class="lh-sm">
-        <span class="app-navbar-title d-block">UAB Eventos</span>
+        <span class="app-navbar-title d-block">UAB DIE</span>
         <small class="app-navbar-subtitle d-block">Universidad Autónoma del Beni</small>
       </div>
     </a>

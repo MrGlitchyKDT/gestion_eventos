@@ -240,7 +240,7 @@ class ReporteController {
         match ($tipo) {
             'eventos' => $this->exportarCsv(
                 'reporte_eventos',
-                ['Código', 'Título', 'Tipo', 'Categoría', 'Modalidad', 'Estado', 'Fecha Inicio', 'Fecha Fin', 'Cupo Máx', 'Inscritos', 'Certificados'],
+                ['Código', 'Título', 'Tipo', 'Área', 'Modalidad', 'Estado', 'Fecha Inicio', 'Fecha Fin', 'Cupo Máx', 'Inscritos', 'Certificados'],
                 $this->reporteEventos()
             ),
             'participantes' => $this->exportarCsv(

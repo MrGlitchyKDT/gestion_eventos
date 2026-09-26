@@ -11,6 +11,8 @@ desktop.ini
 
 # Dependencias y logs
 vendor/
+!public/assets/vendor/
+!public/assets/vendor/**
 *.log
 telegram_log.txt
 

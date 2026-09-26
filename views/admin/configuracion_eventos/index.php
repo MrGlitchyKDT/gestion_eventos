@@ -11,7 +11,7 @@ $escapar = static fn($valor): string => htmlspecialchars((string)$valor, ENT_QUO
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
       <div>
         <h1 class="h3 fw-bold text-uab-azul mb-1">Configuración de eventos</h1>
-        <p class="text-muted small mb-0">Administre los tipos y categorías disponibles al registrar eventos.</p>
+        <p class="text-muted small mb-0">Administre los tipos y áreas disponibles al registrar eventos.</p>
       </div>
       <a href="index.php?action=admin_eventos" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i> Gestión de eventos</a>
     </div>
@@ -26,7 +26,7 @@ $escapar = static fn($valor): string => htmlspecialchars((string)$valor, ENT_QUO
     <?php endif; ?>
 
     <div class="row g-4">
-      <?php foreach (['tipo' => ['titulo' => 'Tipos de evento', 'icono' => 'bi-calendar-event', 'datos' => $tipos], 'categoria' => ['titulo' => 'Categorías de evento', 'icono' => 'bi-tags', 'datos' => $categorias]] as $clave => $catalogo): ?>
+      <?php foreach (['tipo' => ['titulo' => 'Tipos de evento', 'icono' => 'bi-calendar-event', 'datos' => $tipos], 'categoria' => ['titulo' => 'Áreas de evento', 'icono' => 'bi-tags', 'datos' => $categorias]] as $clave => $catalogo): ?>
         <div class="col-lg-6">
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body p-4">
@@ -36,7 +36,7 @@ $escapar = static fn($valor): string => htmlspecialchars((string)$valor, ENT_QUO
                 <input type="hidden" name="catalogo" value="<?= $clave ?>">
                 <div class="col-sm-8">
                   <label class="visually-hidden" for="nombre_<?= $clave ?>">Nombre</label>
-                  <input type="text" class="form-control" id="nombre_<?= $clave ?>" name="nombre" maxlength="100" required placeholder="Nuevo <?= $clave === 'tipo' ? 'tipo de evento' : 'categoría' ?>">
+                  <input type="text" class="form-control" id="nombre_<?= $clave ?>" name="nombre" maxlength="100" required placeholder="Nuevo <?= $clave === 'tipo' ? 'tipo de evento' : 'área' ?>">
                 </div>
                 <div class="col-sm-4 d-grid">
                   <button class="btn btn-uab-azul" type="submit"><i class="bi bi-plus-lg me-1"></i> Agregar</button>

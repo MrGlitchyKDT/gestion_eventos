@@ -145,6 +145,16 @@ switch ($action) {
         require_once __DIR__ . '/../views/participante/mis_inscripciones.php';
         break;
 
+    case 'mi_asistencia':
+        require_once __DIR__ . '/../controllers/EventoController.php';
+        (new EventoController())->miAsistencia();
+        break;
+
+    case 'confirmar_asistencia':
+        require_once __DIR__ . '/../controllers/EventoController.php';
+        (new EventoController())->confirmarAsistencia();
+        break;
+
     case 'mis_certificados':
         require_once __DIR__ . '/../controllers/CertificadoController.php';
         (new CertificadoController())->misCertificados();
@@ -183,6 +193,16 @@ switch ($action) {
         (new ExpositorController())->guardarAsistenciaApi();
         break;
 
+    case 'expositor_abrir_asistencia':
+        require_once __DIR__ . '/../controllers/ExpositorController.php';
+        (new ExpositorController())->abrirAsistencia();
+        break;
+
+    case 'expositor_cerrar_asistencia':
+        require_once __DIR__ . '/../controllers/ExpositorController.php';
+        (new ExpositorController())->cerrarAsistencia();
+        break;
+
     case 'expositor_exportar_asistencia':
         require_once __DIR__ . '/../controllers/ExpositorController.php';
         (new ExpositorController())->exportarAsistencia();
@@ -204,6 +224,8 @@ switch ($action) {
         $expositoresPorEvento = $eventoModel->listarExpositoresAgrupadosPorEventos(array_column($eventos, 'id_evento'));
         require_once __DIR__ . '/../models/SesionEvento.php';
         $sesionesPorEvento = (new SesionEvento())->listarAgrupadasPorEventos(array_column($eventos, 'id_evento'));
+        require_once __DIR__ . '/../models/SerieSesionEvento.php';
+        $seriesPorEvento = (new SerieSesionEvento())->listarAgrupadasPorEventos(array_column($eventos, 'id_evento'));
         require_once __DIR__ . '/../models/Material.php';
         $materialesPorEvento = (new Material())->listarAgrupadosPorEventos(array_column($eventos, 'id_evento'));
         $db = Database::getConnection();
@@ -272,6 +294,11 @@ switch ($action) {
     case 'admin_evento_crear_sesion':
         require_once __DIR__ . '/../controllers/EventoController.php';
         (new EventoController())->adminCrearSesion();
+        break;
+
+    case 'admin_evento_guardar_serie_sesiones':
+        require_once __DIR__ . '/../controllers/EventoController.php';
+        (new EventoController())->adminGuardarSerieSesiones();
         break;
 
     case 'admin_evento_eliminar_sesion':

@@ -103,6 +103,7 @@ require_once __DIR__ . '/../../layouts/navbar.php';
                         'materiales' => $materialesPorEvento[(int)$ev['id_evento']] ?? [],
                         'expositores' => $expositoresPorEvento[(int)$ev['id_evento']] ?? [],
                         'sesiones' => $sesionesPorEvento[(int)$ev['id_evento']] ?? [],
+                        'series' => $seriesPorEvento[(int)$ev['id_evento']] ?? [],
                     ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8');
                     ?>
                     <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#modalExpositores" data-evento="<?= $datosEdicion ?>" onclick="prepararAsignacionExpositor(this)" title="Gestionar expositores">
@@ -386,6 +387,18 @@ require_once __DIR__ . '/../../layouts/navbar.php';
             </div>
           </div>
           <div class="border-top mt-4 pt-3">
+            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+              <div>
+                <h6 class="small fw-bold mb-0">Series recurrentes</h6>
+                <div class="form-text">Para cursos con varias fechas, genere las sesiones automáticamente.</div>
+              </div>
+              <button type="button" class="btn btn-outline-primary btn-sm text-nowrap" data-bs-toggle="modal" data-bs-target="#modalSerieSesiones" onclick="abrirFormularioSerie()">
+                <i class="bi bi-calendar-plus me-1"></i> Nueva serie
+              </button>
+            </div>
+            <div id="lista_series_evento" class="small text-muted">Seleccione un evento.</div>
+          </div>
+          <div class="border-top mt-4 pt-3">
             <h6 class="small fw-bold mb-2">Sesiones registradas</h6>
             <div id="lista_sesiones_evento" class="small text-muted">Seleccione un evento.</div>
           </div>
@@ -393,6 +406,85 @@ require_once __DIR__ . '/../../layouts/navbar.php';
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
           <button type="submit" class="btn btn-uab-azul btn-sm"><i class="bi bi-plus-circle me-1"></i>Agregar sesión</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Serie recurrente de sesiones -->
+<div class="modal fade" id="modalSerieSesiones" tabindex="-1" aria-labelledby="modalSerieSesionesTitulo" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <form action="index.php?action=admin_evento_guardar_serie_sesiones" method="POST" id="formSerieSesiones">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(AuthHelper::tokenCsrf()) ?>">
+        <input type="hidden" name="id_serie" id="serie_id_serie">
+        <input type="hidden" name="id_evento" id="serie_id_evento">
+        <div class="modal-header bg-uab-azul text-white">
+          <h5 class="modal-title" id="modalSerieSesionesTitulo"><i class="bi bi-calendar-range me-2"></i>Nueva serie de sesiones</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="alert alert-primary small py-2"><i class="bi bi-info-circle me-1"></i>Se creará una sesión por cada fecha generada. Cada una tendrá su propia asistencia.</div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Evento</label>
+            <input type="text" id="serie_evento_titulo" class="form-control bg-light" readonly>
+          </div>
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label small fw-semibold" for="serie_titulo">Título de las sesiones *</label>
+              <input type="text" name="titulo" id="serie_titulo" class="form-control" maxlength="150" required placeholder="Ej.: Desarrollo Web — Clase">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="serie_fecha_inicio">Desde *</label>
+              <input type="date" name="fecha_inicio" id="serie_fecha_inicio" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="serie_fecha_fin">Hasta *</label>
+              <input type="date" name="fecha_fin" id="serie_fecha_fin" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="serie_hora_inicio">Hora de inicio *</label>
+              <input type="time" name="hora_inicio" id="serie_hora_inicio" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold" for="serie_hora_fin">Hora de fin *</label>
+              <input type="time" name="hora_fin" id="serie_hora_fin" class="form-control" required>
+            </div>
+            <div class="col-md-7">
+              <label class="form-label small fw-semibold" for="serie_frecuencia">Frecuencia *</label>
+              <select name="frecuencia" id="serie_frecuencia" class="form-select">
+                <option value="SEMANAL">Semanal, en días seleccionados</option>
+                <option value="DIARIA">Cada cierto número de días</option>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label small fw-semibold" for="serie_intervalo">Repetir cada *</label>
+              <div class="input-group"><input type="number" name="intervalo_recurrencia" id="serie_intervalo" class="form-control" min="1" max="30" value="1" required><span class="input-group-text" id="serie_intervalo_texto">semana(s)</span></div>
+            </div>
+            <div class="col-12" id="serie_dias_contenedor">
+              <label class="form-label small fw-semibold d-block">Días de clase *</label>
+              <div class="d-flex flex-wrap gap-2">
+                <?php foreach ([1 => 'Lun', 2 => 'Mar', 3 => 'Mié', 4 => 'Jue', 5 => 'Vie', 6 => 'Sáb', 7 => 'Dom'] as $dia => $nombre): ?>
+                  <input class="btn-check serie-dia" type="checkbox" name="dias_semana[]" value="<?= $dia ?>" id="serie_dia_<?= $dia ?>">
+                  <label class="btn btn-outline-secondary btn-sm" for="serie_dia_<?= $dia ?>"><?= $nombre ?></label>
+                <?php endforeach; ?>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-semibold" for="serie_lugar">Lugar específico</label>
+              <input type="text" name="lugar_especifico" id="serie_lugar" class="form-control" maxlength="200" placeholder="Aula, auditorio o enlace virtual">
+            </div>
+          </div>
+          <div class="alert alert-light border mt-4 mb-0">
+            <strong><i class="bi bi-calendar-check me-1"></i>Vista previa:</strong>
+            <span id="serie_previsualizacion">Complete el periodo y la frecuencia para calcular las sesiones.</span>
+          </div>
+          <p class="form-text mb-0 mt-2">Al editar, sólo se regeneran las sesiones futuras programadas que no sean excepciones.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-uab-azul btn-sm"><i class="bi bi-calendar-plus me-1"></i><span id="serie_boton_texto">Crear sesiones</span></button>
         </div>
       </form>
     </div>
@@ -449,6 +541,7 @@ require_once __DIR__ . '/../../layouts/navbar.php';
   <div class="modal-dialog">
     <div class="modal-content">
       <form action="index.php?action=admin_inscribir_manual" method="POST">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(AuthHelper::tokenCsrf()) ?>">
         <div class="modal-header bg-uab-verde text-white">
           <h5 class="modal-title"><i class="bi bi-person-plus me-1"></i> Inscripción Manual Administrativa</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -497,6 +590,14 @@ require_once __DIR__ . '/../../layouts/navbar.php';
 </form>
 
 <script>
+let eventoSesionesActivo = null;
+
+// La base conserva id_categoria por compatibilidad; la interfaz lo presenta como Área.
+document.querySelectorAll('select[name="id_categoria"]').forEach((select) => {
+  const etiqueta = select.closest('.col-md-4')?.querySelector('label');
+  if (etiqueta) etiqueta.textContent = 'Área *';
+});
+
 function prepararInscripcionManual(idEvento, titulo) {
   document.getElementById('manual_id_evento').value = idEvento;
   document.getElementById('manual_evento_titulo').value = titulo;
@@ -504,6 +605,7 @@ function prepararInscripcionManual(idEvento, titulo) {
 
 function prepararSesionEvento(boton) {
   const evento = JSON.parse(boton.dataset.evento);
+  eventoSesionesActivo = evento;
   document.getElementById('sesion_id_evento').value = evento.id_evento;
   document.getElementById('sesion_evento_titulo').value = `${evento.codigo} — ${evento.titulo}`;
   document.getElementById('sesion_titulo').value = '';
@@ -535,7 +637,99 @@ function prepararSesionEvento(boton) {
       }
     });
   });
+
+  const series = Array.isArray(evento.series) ? evento.series : [];
+  const listaSeries = document.getElementById('lista_series_evento');
+  listaSeries.innerHTML = series.length
+    ? series.map((serie) => {
+        const dias = String(serie.dias_semana || '').split(',').filter(Boolean).map(Number);
+        const nombresDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+        const frecuencia = serie.frecuencia === 'SEMANAL'
+          ? dias.map((dia) => nombresDias[dia - 1]).join(', ')
+          : `cada ${serie.intervalo_recurrencia} día(s)`;
+        return `<div class="d-flex align-items-center justify-content-between gap-2 border rounded px-2 py-2 mb-2">
+          <div><strong>${escaparHtml(serie.titulo)}</strong><br><span class="text-muted">${escaparHtml(serie.fecha_inicio)} al ${escaparHtml(serie.fecha_fin)} · ${escaparHtml(frecuencia)}</span></div>
+          <button type="button" class="btn btn-outline-primary btn-sm" data-editar-serie="${Number(serie.id_serie)}" title="Editar sesiones futuras"><i class="bi bi-pencil"></i></button>
+        </div>`;
+      }).join('')
+    : '<div class="text-muted">No hay series recurrentes para este evento.</div>';
+  listaSeries.querySelectorAll('[data-editar-serie]').forEach((botonEditar) => {
+    botonEditar.addEventListener('click', () => {
+      const serie = series.find((item) => Number(item.id_serie) === Number(botonEditar.dataset.editarSerie));
+      abrirFormularioSerie(serie);
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('modalSerieSesiones')).show();
+    });
+  });
 }
+
+function abrirFormularioSerie(serie = null) {
+  const evento = eventoSesionesActivo;
+  if (!evento) return;
+  document.getElementById('serie_id_serie').value = serie ? serie.id_serie : '';
+  document.getElementById('serie_id_evento').value = evento.id_evento;
+  document.getElementById('serie_evento_titulo').value = `${evento.codigo} — ${evento.titulo}`;
+  document.getElementById('modalSerieSesionesTitulo').innerHTML = `<i class="bi bi-calendar-range me-2"></i>${serie ? 'Editar serie de sesiones' : 'Nueva serie de sesiones'}`;
+  document.getElementById('serie_boton_texto').textContent = serie ? 'Guardar y regenerar futuras' : 'Crear sesiones';
+  ['serie_fecha_inicio', 'serie_fecha_fin'].forEach((id) => {
+    document.getElementById(id).min = evento.fecha_inicio;
+    document.getElementById(id).max = evento.fecha_fin;
+  });
+  document.getElementById('serie_titulo').value = serie ? serie.titulo : '';
+  document.getElementById('serie_fecha_inicio').value = serie ? serie.fecha_inicio : evento.fecha_inicio;
+  document.getElementById('serie_fecha_fin').value = serie ? serie.fecha_fin : evento.fecha_fin;
+  document.getElementById('serie_hora_inicio').value = serie ? String(serie.hora_inicio).slice(0, 5) : '';
+  document.getElementById('serie_hora_fin').value = serie ? String(serie.hora_fin).slice(0, 5) : '';
+  document.getElementById('serie_lugar').value = serie ? (serie.lugar_especifico || '') : (evento.lugar || '');
+  document.getElementById('serie_frecuencia').value = serie ? serie.frecuencia : 'SEMANAL';
+  document.getElementById('serie_intervalo').value = serie ? serie.intervalo_recurrencia : 1;
+  const dias = serie ? String(serie.dias_semana || '').split(',').filter(Boolean).map(Number) : [1, 2, 3, 4, 5];
+  document.querySelectorAll('.serie-dia').forEach((campo) => { campo.checked = dias.includes(Number(campo.value)); });
+  actualizarFormularioSerie();
+}
+
+function actualizarFormularioSerie() {
+  const semanal = document.getElementById('serie_frecuencia').value === 'SEMANAL';
+  document.getElementById('serie_dias_contenedor').classList.toggle('d-none', !semanal);
+  document.getElementById('serie_intervalo_texto').textContent = semanal ? 'semana(s)' : 'día(s)';
+  actualizarPrevisualizacionSerie();
+}
+
+function actualizarPrevisualizacionSerie() {
+  const inicioTexto = document.getElementById('serie_fecha_inicio').value;
+  const finTexto = document.getElementById('serie_fecha_fin').value;
+  const destino = document.getElementById('serie_previsualizacion');
+  if (!inicioTexto || !finTexto || inicioTexto > finTexto) {
+    destino.textContent = 'Complete un periodo válido para calcular las sesiones.';
+    return;
+  }
+  const frecuencia = document.getElementById('serie_frecuencia').value;
+  const intervalo = Math.max(1, Number(document.getElementById('serie_intervalo').value) || 1);
+  const dias = [...document.querySelectorAll('.serie-dia:checked')].map((campo) => Number(campo.value));
+  if (frecuencia === 'SEMANAL' && !dias.length) {
+    destino.textContent = 'Seleccione al menos un día de clase.';
+    return;
+  }
+  const inicio = new Date(`${inicioTexto}T00:00:00`);
+  const fin = new Date(`${finTexto}T00:00:00`);
+  let cantidad = 0;
+  for (let fecha = new Date(inicio); fecha <= fin; fecha.setDate(fecha.getDate() + 1)) {
+    const diasTranscurridos = Math.floor((fecha - inicio) / 86400000);
+    const diaSemana = fecha.getDay() === 0 ? 7 : fecha.getDay();
+    const corresponde = frecuencia === 'DIARIA'
+      ? diasTranscurridos % intervalo === 0
+      : dias.includes(diaSemana) && Math.floor(diasTranscurridos / 7) % intervalo === 0;
+    if (corresponde) cantidad++;
+  }
+  destino.textContent = cantidad > 366
+    ? `Se generarían ${cantidad} sesiones. El límite permitido es 366.`
+    : `Se crearán ${cantidad} sesiones individuales para registrar asistencia.`;
+}
+
+['serie_fecha_inicio', 'serie_fecha_fin', 'serie_frecuencia', 'serie_intervalo'].forEach((id) => {
+  document.getElementById(id).addEventListener('change', actualizarFormularioSerie);
+  document.getElementById(id).addEventListener('input', actualizarFormularioSerie);
+});
+document.querySelectorAll('.serie-dia').forEach((campo) => campo.addEventListener('change', actualizarPrevisualizacionSerie));
 
 function prepararAsignacionExpositor(boton) {
   const evento = JSON.parse(boton.dataset.evento);

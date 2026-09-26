@@ -41,8 +41,9 @@ class SesionEvento {
                     fecha = :fecha,
                     hora_inicio = :hora_inicio,
                     hora_fin = :hora_fin,
-                    lugar_especifico = :lugar_especifico
-                WHERE id_sesion = :id_sesion";
+                    lugar_especifico = :lugar_especifico,
+                    es_excepcion = CASE WHEN id_serie IS NOT NULL THEN 1 ELSE es_excepcion END
+                WHERE id_sesion = :id_sesion AND estado = 'PROGRAMADA'";
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
@@ -115,6 +116,31 @@ class SesionEvento {
         ]);
     }
 
+    /** Abre una ventana temporal de confirmación para los participantes. */
+    public function abrirAsistencia(int $idSesion, int $idDocente, int $minutos): bool {
+        if ($minutos < 5 || $minutos > 240) throw new InvalidArgumentException('La ventana debe durar entre 5 y 240 minutos.');
+        $stmt = $this->db->prepare("UPDATE sesiones_evento
+            SET estado = 'EN_CURSO', id_usuario_apertura = :docente,
+                fecha_apertura_asistencia = NOW(),
+                fecha_cierre_programada = DATE_ADD(NOW(), INTERVAL :minutos MINUTE),
+                id_usuario_cierre = NULL, fecha_cierre_asistencia = NULL
+            WHERE id_sesion = :sesion AND estado = 'PROGRAMADA'");
+        $stmt->bindValue(':docente', $idDocente, PDO::PARAM_INT);
+        $stmt->bindValue(':minutos', $minutos, PDO::PARAM_INT);
+        $stmt->bindValue(':sesion', $idSesion, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->rowCount() === 1;
+    }
+
+    /** Cierra la ventana y deja la sesión lista para el cálculo definitivo. */
+    public function cerrarAsistencia(int $idSesion, int $idDocente): bool {
+        $stmt = $this->db->prepare("UPDATE sesiones_evento
+            SET estado = 'CONCLUIDA', id_usuario_cierre = :docente, fecha_cierre_asistencia = NOW()
+            WHERE id_sesion = :sesion AND estado = 'EN_CURSO'");
+        $stmt->execute([':docente' => $idDocente, ':sesion' => $idSesion]);
+        return $stmt->rowCount() === 1;
+    }
+
     public function eliminar(int $id_sesion): bool {
         $sql = "DELETE FROM sesiones_evento WHERE id_sesion = :id_sesion";
         $stmt = $this->db->prepare($sql);
@@ -126,7 +152,7 @@ class SesionEvento {
      */
     public function contarSesionesValidas(int $id_evento): int {
         $sql = "SELECT COUNT(*) FROM sesiones_evento 
-                WHERE id_evento = :id_evento AND estado != 'CANCELADA'";
+                WHERE id_evento = :id_evento AND estado = 'CONCLUIDA'";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id_evento' => $id_evento]);
         return (int)$stmt->fetchColumn();

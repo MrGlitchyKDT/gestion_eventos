@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../helpers/AuthHelper.php';
 AuthHelper::requerirRol(['EXPOSITOR', 'ADMINISTRADOR']);
 
-$titulo_pagina = 'Mis Eventos — UAB Eventos';
+$titulo_pagina = 'Mis Eventos — UAB DIE';
 $seccion_activa = 'mis_eventos';
 $eventos = $eventos ?? [];
 

@@ -145,10 +145,10 @@ class ExpositorController {
         }
 
         try {
-            // RF-25: Verificar que la sesión no esté concluida o cancelada
+            // Las correcciones manuales se permiten únicamente después del cierre.
             $sesion = $this->sesionModel->obtenerPorId($id_sesion);
-            if (!$sesion || in_array($sesion['estado'], ['CANCELADA'], true)) {
-                throw new Exception("No se puede registrar asistencia en una sesión cancelada.");
+            if (!$sesion || $sesion['estado'] !== 'CONCLUIDA') {
+                throw new Exception('Las correcciones manuales se habilitan cuando la asistencia de la sesión fue cerrada.');
             }
 
             $idsPermitidos = array_column($this->eventosAutorizados($usuario), 'id_evento');
@@ -169,7 +169,8 @@ class ExpositorController {
                 $id_inscripcion,
                 $estado,
                 (int)$usuario['id_usuario'],
-                $observacion
+                $observacion,
+                strtoupper((string)$usuario['rol_nombre']) === 'ADMINISTRADOR' ? 'ADMINISTRADOR' : 'DOCENTE'
             );
 
             if ($guardado) {
@@ -194,6 +195,42 @@ class ExpositorController {
             echo json_encode(['success' => false, 'mensaje' => $e->getMessage()]);
         }
         exit();
+    }
+
+    /** Abre la ventana de autoasistencia de una sesión asignada al docente. */
+    public function abrirAsistencia(): void {
+        AuthHelper::requerirRol(['EXPOSITOR', 'ADMINISTRADOR']);
+        $usuario = AuthHelper::obtenerUsuario();
+        $idSesion = filter_input(INPUT_POST, 'id_sesion', FILTER_VALIDATE_INT);
+        $minutos = filter_input(INPUT_POST, 'duracion_minutos', FILTER_VALIDATE_INT);
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null) || !$idSesion) throw new Exception('Solicitud de apertura no válida.');
+            $sesion = $this->sesionModel->obtenerPorId($idSesion);
+            if (!$sesion || !$this->puedeGestionarSesion($sesion, $usuario)) throw new Exception('No tiene permiso para abrir esta sesión.');
+            if (!$this->sesionModel->abrirAsistencia($idSesion, (int)$usuario['id_usuario'], $minutos ?: 30)) throw new Exception('La sesión ya fue abierta, cerrada o cancelada.');
+            Auditoria::registrar((int)$usuario['id_usuario'], 'ABRIR_ASISTENCIA', 'ASISTENCIAS', "Sesión #{$idSesion} abierta durante " . ($minutos ?: 30) . ' minutos.');
+            $_SESSION['success'] = 'Asistencia abierta para los participantes inscritos.';
+        } catch (Throwable $e) { $_SESSION['error'] = $e->getMessage(); }
+        $evento = (int)($_POST['id_evento'] ?? 0);
+        header('Location: index.php?action=expositor_asistencia&id_evento=' . $evento . '&id_sesion=' . (int)$idSesion); exit();
+    }
+
+    /** Cierra una sesión y recalcula la asistencia definitiva del evento. */
+    public function cerrarAsistencia(): void {
+        AuthHelper::requerirRol(['EXPOSITOR', 'ADMINISTRADOR']);
+        $usuario = AuthHelper::obtenerUsuario();
+        $idSesion = filter_input(INPUT_POST, 'id_sesion', FILTER_VALIDATE_INT);
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null) || !$idSesion) throw new Exception('Solicitud de cierre no válida.');
+            $sesion = $this->sesionModel->obtenerPorId($idSesion);
+            if (!$sesion || !$this->puedeGestionarSesion($sesion, $usuario)) throw new Exception('No tiene permiso para cerrar esta sesión.');
+            if (!$this->sesionModel->cerrarAsistencia($idSesion, (int)$usuario['id_usuario'])) throw new Exception('La sesión no tiene una asistencia abierta.');
+            $this->asistenciaModel->recalcularEvento((int)$sesion['id_evento']);
+            Auditoria::registrar((int)$usuario['id_usuario'], 'CERRAR_ASISTENCIA', 'ASISTENCIAS', "Sesión #{$idSesion} cerrada y porcentajes recalculados.");
+            $_SESSION['success'] = 'Asistencia cerrada. Los porcentajes fueron actualizados.';
+        } catch (Throwable $e) { $_SESSION['error'] = $e->getMessage(); }
+        $evento = (int)($_POST['id_evento'] ?? 0);
+        header('Location: index.php?action=expositor_asistencia&id_evento=' . $evento . '&id_sesion=' . (int)$idSesion); exit();
     }
 
     /** Exporta el informe de asistencia del evento seleccionado a CSV. */
@@ -231,5 +268,9 @@ class ExpositorController {
             return $db->query('SELECT id_evento, codigo, titulo FROM eventos ORDER BY fecha_inicio DESC')->fetchAll();
         }
         return $this->eventoModel->listarPorExpositor((int)$usuario['id_usuario']);
+    }
+
+    private function puedeGestionarSesion(array $sesion, array $usuario): bool {
+        return in_array((int)$sesion['id_evento'], array_map('intval', array_column($this->eventosAutorizados($usuario), 'id_evento')), true);
     }
 }

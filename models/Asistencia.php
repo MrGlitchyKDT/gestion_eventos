@@ -12,20 +12,21 @@ class Asistencia {
     /**
      * RF-23, RF-24 y RF-25: Asienta o modifica la asistencia individual por sesión
      */
-    public function registrarOActualizar(int $id_sesion, int $id_inscripcion, string $estado, int $id_usuario_registro, ?string $observacion = null): bool {
+    public function registrarOActualizar(int $id_sesion, int $id_inscripcion, string $estado, int $id_usuario_registro, ?string $observacion = null, string $origen = 'DOCENTE'): bool {
         $estadosPermitidos = ['PRESENTE', 'FALTA', 'ATRASO', 'JUSTIFICADO'];
         if (!in_array($estado, $estadosPermitidos, true)) {
             throw new InvalidArgumentException("Estado de asistencia no válido: $estado");
         }
 
         $sql = "INSERT INTO asistencias (
-                    id_sesion, id_inscripcion, estado, id_usuario_registro, observacion, fecha_registro
+                    id_sesion, id_inscripcion, estado, id_usuario_registro, origen_registro, observacion, fecha_registro
                 ) VALUES (
-                    :id_sesion, :id_inscripcion, :estado, :id_usuario_registro, :observacion, NOW()
+                    :id_sesion, :id_inscripcion, :estado, :id_usuario_registro, :origen, :observacion, NOW()
                 )
                 ON DUPLICATE KEY UPDATE 
                     estado = :estado_up,
                     id_usuario_registro = :id_usuario_up,
+                    origen_registro = :origen_up,
                     observacion = :observacion_up,
                     fecha_registro = NOW()";
 
@@ -35,9 +36,11 @@ class Asistencia {
             ':id_inscripcion'        => $id_inscripcion,
             ':estado'                => $estado,
             ':id_usuario_registro'   => $id_usuario_registro,
+            ':origen'                 => $origen,
             ':observacion'           => $observacion,
             ':estado_up'             => $estado,
             ':id_usuario_up'         => $id_usuario_registro,
+            ':origen_up'             => $origen,
             ':observacion_up'        => $observacion
         ]);
 
@@ -56,13 +59,60 @@ class Asistencia {
         return $ejecutado;
     }
 
+    /** Confirma presencia propia durante una ventana abierta por el docente. */
+    public function confirmarParticipante(int $idSesion, int $idUsuario): void {
+        $this->db->beginTransaction();
+        try {
+            $stmt = $this->db->prepare("SELECT se.id_sesion, se.id_evento, i.id_inscripcion
+                FROM sesiones_evento se
+                INNER JOIN inscripciones i ON i.id_evento = se.id_evento
+                WHERE se.id_sesion = :sesion AND i.id_usuario = :usuario
+                  AND i.estado = 'INSCRITO' AND se.estado = 'EN_CURSO'
+                  AND se.fecha_apertura_asistencia IS NOT NULL
+                  AND se.fecha_cierre_programada IS NOT NULL
+                  AND NOW() BETWEEN se.fecha_apertura_asistencia AND se.fecha_cierre_programada
+                FOR UPDATE");
+            $stmt->execute([':sesion'=>$idSesion, ':usuario'=>$idUsuario]);
+            $registro = $stmt->fetch();
+            if (!$registro) throw new Exception('La asistencia no está abierta o no tiene una inscripción activa para esta sesión.');
+            $insertar = $this->db->prepare("INSERT INTO asistencias
+                (id_sesion,id_inscripcion,estado,id_usuario_registro,origen_registro,fecha_confirmacion_participante,fecha_registro)
+                VALUES (:sesion,:inscripcion,'PRESENTE',:usuario,'PARTICIPANTE',NOW(),NOW())");
+            try { $insertar->execute([':sesion'=>$idSesion, ':inscripcion'=>$registro['id_inscripcion'], ':usuario'=>$idUsuario]); }
+            catch (PDOException $e) { if ((string)$e->getCode() === '23000') throw new Exception('Ya confirmó su asistencia para esta sesión.'); throw $e; }
+            $this->calcularYActualizarPorcentaje((int)$registro['id_inscripcion'], (int)$registro['id_evento']);
+            $this->db->commit();
+        } catch (Throwable $e) { if ($this->db->inTransaction()) $this->db->rollBack(); throw $e; }
+    }
+
+    public function sesionesAbiertasPorUsuario(int $idUsuario, ?int $idEvento = null): array {
+        $sql = "SELECT se.id_sesion, se.id_evento, se.titulo AS sesion_titulo, se.fecha, se.hora_inicio, se.hora_fin,
+                       se.fecha_cierre_programada, e.codigo AS evento_codigo, e.titulo AS evento_titulo,
+                       i.id_inscripcion, a.id_asistencia
+                FROM sesiones_evento se
+                INNER JOIN eventos e ON e.id_evento = se.id_evento
+                INNER JOIN inscripciones i ON i.id_evento = se.id_evento AND i.id_usuario = :usuario AND i.estado = 'INSCRITO'
+                LEFT JOIN asistencias a ON a.id_sesion = se.id_sesion AND a.id_inscripcion = i.id_inscripcion
+                WHERE se.estado = 'EN_CURSO' AND se.fecha_apertura_asistencia <= NOW() AND se.fecha_cierre_programada >= NOW()";
+        $params = [':usuario'=>$idUsuario];
+        if ($idEvento) { $sql .= ' AND se.id_evento = :evento'; $params[':evento']=$idEvento; }
+        $sql .= ' ORDER BY se.fecha_cierre_programada ASC';
+        $stmt=$this->db->prepare($sql); $stmt->execute($params); return $stmt->fetchAll();
+    }
+
+    public function recalcularEvento(int $idEvento): void {
+        $stmt = $this->db->prepare("SELECT id_inscripcion FROM inscripciones WHERE id_evento = :evento AND estado IN ('INSCRITO','ASISTIO','APROBADO')");
+        $stmt->execute([':evento'=>$idEvento]);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $idInscripcion) $this->calcularYActualizarPorcentaje((int)$idInscripcion, $idEvento);
+    }
+
     /**
      * RF-51 y RF-52: Calcula el porcentaje de asistencia acumulado y habilita para certificación
      */
     public function calcularYActualizarPorcentaje(int $id_inscripcion, int $id_evento): array {
         // 1. Conteo de sesiones válidas (no canceladas)
         $sqlTotal = "SELECT COUNT(*) FROM sesiones_evento 
-                     WHERE id_evento = :id_evento AND estado != 'CANCELADA'";
+                     WHERE id_evento = :id_evento AND estado = 'CONCLUIDA'";
         $stmtTotal = $this->db->prepare($sqlTotal);
         $stmtTotal->execute([':id_evento' => $id_evento]);
         $totalSesiones = (int)$stmtTotal->fetchColumn();
@@ -77,7 +127,7 @@ class Asistencia {
                          INNER JOIN sesiones_evento se ON a.id_sesion = se.id_sesion
                          WHERE a.id_inscripcion = :id_inscripcion 
                            AND se.id_evento = :id_evento 
-                           AND se.estado != 'CANCELADA'
+                           AND se.estado = 'CONCLUIDA'
                            AND a.estado IN ('PRESENTE', 'JUSTIFICADO')";
         $stmtAsistidas = $this->db->prepare($sqlAsistidas);
         $stmtAsistidas->execute([

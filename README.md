@@ -1,4 +1,4 @@
-# Sistema de Gestión de Eventos Académicos y Certificaciones — UAB Eventos
+# Sistema de Gestión de Eventos Académicos y Certificaciones — UAB DIE
 
 Plataforma web integral para administrar eventos académicos, controlar cupos, registrar asistencia por sesiones y emitir certificados digitales verificables. Está desarrollada con el patrón **MVC (Modelo-Vista-Controlador)** en **PHP orientado a objetos**, **MySQL/MariaDB** y **Bootstrap 5.3**.
 
@@ -9,7 +9,7 @@ Plataforma web integral para administrar eventos académicos, controlar cupos, r
 * **Control de Acceso Basado en Roles (RBAC):** Espacios de trabajo y permisos independientes para `ADMINISTRADOR`, `EXPOSITOR` y `PARTICIPANTE`.
 * **Transaccionalidad y Bloqueo Pesimista:** Control de cupos con concurrencia segura mediante `SELECT ... FOR UPDATE` en MySQL para evitar sobreinscripciones simultáneas.
 * **Certificados PDF por plantilla:** El administrador carga una plantilla PDF para cada evento, ajusta visualmente los campos y emite documentos individuales con folio y QR verificable.
-* **Asistencia Modular por Sesiones:** Registro de presencias por fecha y hora con recálculo automático del porcentaje de asistencia y validación contra el umbral mínimo del evento.
+* **Asistencia por ventanas de sesión:** El docente abre y cierra una ventana temporal; los participantes inscritos confirman su propia presencia de forma segura y el sistema consolida el porcentaje al cerrarla.
 * **Motor Analítico y Reportería:** Exportación de padrones, listas de asistencia y eventos a archivos CSV compatibles con Microsoft Excel mediante streaming HTTP y codificación UTF-8 BOM.
 * **Diseño Responsivo e Institucional:** Cabecera azul institucional unificada, navegación horizontal por rol y menú lateral `offcanvas` en móvil. Los modales de eventos conservan sus acciones visibles y permiten desplazamiento en pantallas reducidas.
 
@@ -21,8 +21,8 @@ Plataforma web integral para administrar eventos académicos, controlar cupos, r
 | :--- | :--- |
 | **Lenguaje Backend** | PHP 8.1+ (Tipado estricto, Programación Orientada a Objetos) |
 | **Base de Datos** | MySQL 8.0 / MariaDB 10.4+ (Motor InnoDB, Llaves Foráneas) |
-| **Capa Frontend** | HTML5, Bootstrap 5.3, Bootstrap Icons |
-| **Tipografía** | Google Fonts (*Poppins* y *Open Sans*) |
+| **Capa Frontend** | HTML5, Bootstrap 5.3.3 y Bootstrap Icons 1.11.3, incluidos localmente |
+| **Tipografía** | Poppins y Open Sans, incluidas localmente |
 | **Arquitectura** | MVC Nativo + Front Controller + Singleton PDO |
 | **PDF** | `setasign/fpdf` y `setasign/fpdi`, administrados con Composer |
 | **Seguridad** | Hashing con `Bcrypt` (`password_hash`), CSRF, RBAC y sentencias preparadas PDO |
@@ -49,6 +49,7 @@ La autenticación consulta `usuarios` y `roles` mediante PDO, valida la contrase
 * Inicio de sesión, registro y cierre de sesión usan formularios POST con token CSRF. Para salir se utiliza **Cerrar sesión** desde el menú de perfil de la cabecera.
 * PHP requiere las extensiones `pdo_mysql`, `mbstring` y `fileinfo`. La conexión se configura en `config/Database.php`.
 * Las dependencias PHP se instalan desde el archivo `composer.json`. En un entorno nuevo, ejecute `composer install` desde la raíz del proyecto.
+* Las dependencias de interfaz están en `public/assets/vendor`; el encabezado y el pie de página no requieren conexión a CDN para cargar Bootstrap, sus iconos ni las fuentes.
 
 ### Pruebas de autenticación
 
@@ -72,8 +73,8 @@ El administrador inicia en `admin_dashboard`, una pantalla breve de acceso a los
 * Cargar varios materiales al crear o editar un evento. Se aceptan `PDF`, `ZIP`, `RAR`, `PPTX`, `DOCX`, `XLSX` y `TXT`, hasta 20 MB por archivo.
 * Gestionar los archivos ya publicados: descargarlos o eliminarlos desde el modal de edición.
 * Asignar expositores activos a un evento, indicar su función y retirar asignaciones cuando sea necesario.
-* Registrar varias sesiones por evento con título, fecha, horario y lugar. La fecha de cada sesión se valida contra el rango del evento; también se pueden eliminar sesiones.
-* Configurar tipos y categorías de eventos. Los registros sin eventos asociados se eliminan; los que forman parte del historial se desactivan.
+* Registrar sesiones únicas o series recurrentes para cursos. Una serie puede repetirse por días de la semana o cada cierto número de días, muestra una vista previa y genera las sesiones individuales necesarias para la asistencia.
+* Configurar tipos y áreas de eventos. Los registros sin eventos asociados se eliminan; los que forman parte del historial se desactivan.
 * Gestionar usuarios, roles, estados de cuentas, inscripciones administrativas y reportes CSV.
 * Cargar una plantilla PDF por evento, editar visualmente las posiciones de sus campos y emitir o regenerar certificados PDF para participantes habilitados.
 * Consultar los diez últimos registros de auditoría en Reportes y abrir una vista paginada con el historial administrativo completo.
@@ -83,14 +84,15 @@ El administrador inicia en `admin_dashboard`, una pantalla breve de acceso a los
 
 * Explorar convocatorias publicadas, aplicar filtros y completar una inscripción dentro del periodo habilitado y del cupo disponible.
 * Consultar sus inscripciones, perfil y certificados.
+* Abrir **Asistencia** desde cada inscripción activa y marcar su presencia una sola vez cuando el docente haya habilitado la sesión.
 * Ver el cronograma de sesiones y los expositores en el detalle de cada evento.
 * Descargar materiales sólo si tiene una inscripción activa o completada en el evento (`INSCRITO`, `ASISTIO`, `APROBADO` o `REPROBADO`).
 
 ### Expositor
 
 * Consultar directamente sus eventos asignados desde la cabecera.
-* Abrir la planilla de asistencia y filtrar por evento y sesión.
-* Marcar a cada participante como **Presente**, **Justificado** o **Falta** sin recargar la página.
+* Abrir la asistencia de una sesión asignada por 15, 30, 45, 60, 90 o 120 minutos y cerrarla cuando finalice.
+* Consultar las confirmaciones de los participantes y, después del cierre, corregir cada registro como **Presente**, **Justificado** o **Falta**.
 * Imprimir la planilla actual o exportar un CSV detallado de todas las sesiones del evento.
 * El expositor sólo puede consultar, registrar y exportar la asistencia de eventos que le fueron asignados.
 
@@ -114,11 +116,15 @@ Los archivos de apoyo no se guardan bajo `public`. La aplicación los almacena e
 
 ### Cronograma
 
-Las sesiones se persisten en `sesiones_evento` y se muestran en orden cronológico en el detalle público del evento. Cada una posee `titulo`, `fecha`, `hora_inicio`, `hora_fin`, `lugar_especifico` y `estado`.
+Las sesiones se persisten en `sesiones_evento` y se muestran en orden cronológico en el detalle público del evento. Cada una posee `titulo`, `fecha`, `hora_inicio`, `hora_fin`, `lugar_especifico` y `estado`. Al abrir asistencia se guardan el docente que la abrió, la fecha de apertura y el cierre programado; al cerrarla se registra quién hizo el cierre y la fecha efectiva.
+
+### Series recurrentes
+
+Las series de cursos se almacenan en `series_sesiones_evento` y sus días semanales en `serie_sesiones_dias`. Cada fecha generada conserva una fila propia en `sesiones_evento`, relacionada mediante `id_serie`, para que la asistencia siempre se registre por día. Al editar una serie, el sistema sólo regenera sesiones futuras en estado `PROGRAMADA` que no sean excepciones; sesiones abiertas, concluidas, con asistencia o marcadas como excepción permanecen intactas. La generación valida el periodo del evento, horarios, días de clase, cruces con otras sesiones y un máximo de 366 sesiones.
 
 ### Asistencia y certificación
 
-La tabla `asistencias` mantiene un único registro por combinación de sesión e inscripción. Las opciones `PRESENTE` y `JUSTIFICADO` cuentan como asistencia válida; `FALTA` no. Tras cada cambio, el sistema recalcula el porcentaje sobre las sesiones no canceladas y actualiza `porcentaje_asistencia` y `habilitado_certificado` en `inscripciones` según el mínimo configurado para el evento.
+La tabla `asistencias` mantiene un único registro por combinación de sesión e inscripción y conserva el origen del registro. El participante sólo puede crear su propio registro `PRESENTE` durante una ventana vigente, con inscripción `INSCRITO`; el cierre de la sesión consolida el porcentaje. El docente y el administrador pueden corregir la lista ya cerrada como `PRESENTE`, `JUSTIFICADO` o `FALTA`. Sólo las sesiones `CONCLUIDA` forman parte del cálculo de `porcentaje_asistencia` y de `habilitado_certificado`; `PRESENTE` y `JUSTIFICADO` cuentan para el mínimo configurado.
 
 ### Certificados con plantilla PDF
 
@@ -141,9 +147,9 @@ La validación pública se mantiene en `verificar_certificado` mediante `codigo_
 * Contraseñas con `password_hash()` y validación con `password_verify()`.
 * Sentencias PDO preparadas para las consultas con datos externos.
 * Sesiones con regeneración de identificador al autenticarse, cookies `HttpOnly`, `SameSite=Lax` y verificación del rol y estado de cuenta en cada petición.
-* Tokens CSRF para acceso, registro, cierre de sesión y operaciones administrativas. La API de asistencia también exige el token.
+* Tokens CSRF para acceso, registro, cierre de sesión, operaciones administrativas y apertura, cierre o confirmación de asistencia.
 * Validación de tipo por extensión y MIME, tamaño máximo y nombre interno aleatorio para archivos adjuntos.
-* Verificación de pertenencia del participante a la sesión y de la asignación del expositor antes de guardar asistencia.
+* Verificación de pertenencia del participante a la inscripción, de la ventana horaria en el servidor, de registro único por sesión y de la asignación del expositor antes de guardar asistencia.
 * Plantillas y certificados PDF fuera del directorio público; el administrador es el único rol que puede ver la plantilla y editar sus posiciones.
 * La emisión verifica que el evento tenga plantilla activa, que emita certificados y que el participante esté habilitado.
 
@@ -154,6 +160,7 @@ La validación pública se mantiene en `verificar_certificado` mediante `codigo_
 | `admin_eventos` | Crear, editar y administrar eventos, materiales, sesiones y expositores |
 | `admin_evento_asignar_expositor` / `admin_evento_desasignar_expositor` | Gestionar responsables académicos del evento |
 | `admin_evento_crear_sesion` / `admin_evento_eliminar_sesion` | Gestionar el cronograma |
+| `admin_evento_guardar_serie_sesiones` | Crear o editar una serie recurrente y generar sus sesiones futuras |
 | `admin_certificados` | Cargar plantilla, editar posiciones, emitir y consultar certificados de un evento |
 | `admin_plantilla_certificado_guardar` | Subir o reemplazar una plantilla PDF |
 | `admin_plantilla_certificado_diseno` | Guardar posiciones del editor visual |
@@ -164,7 +171,9 @@ La validación pública se mantiene en `verificar_certificado` mediante `codigo_
 | `admin_auditoria` | Consultar el historial administrativo completo con paginación |
 | `descargar_material` | Descarga protegida de un material de evento |
 | `expositor_asistencia` | Planilla filtrable de asistencia |
-| `api_guardar_asistencia` | Endpoint JSON para marcar asistencia |
+| `expositor_abrir_asistencia` / `expositor_cerrar_asistencia` | Abrir o cerrar la ventana de autoasistencia de una sesión |
+| `mi_asistencia` / `confirmar_asistencia` | Consultar sesiones abiertas y confirmar la presencia propia |
+| `api_guardar_asistencia` | Endpoint JSON para corregir asistencia después del cierre |
 | `expositor_exportar_asistencia` | Informe CSV de asistencia por evento |
 
 ## Estructura del Repositorio
