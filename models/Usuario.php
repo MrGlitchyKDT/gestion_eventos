@@ -75,18 +75,29 @@ class Usuario {
     }
 
     /**
-     * RF-04: Establece token temporal para recuperación de contraseña
+     * Crea una clave de recuperación de un solo uso para entrega asistida.
+     * Sólo el hash queda almacenado; el valor original se devuelve una vez
+     * para que el administrador lo entregue por el canal verificado.
      */
-    public function guardarTokenRecuperacion(string $correo, string $token, string $expiracion): bool {
-        $sql = "UPDATE usuarios 
-                SET token_recuperacion = :token, token_expiracion = :expiracion 
-                WHERE correo = :correo AND activo = 1";
+    public function crearTokenRecuperacion(int $idUsuario, int $minutosVigencia = 60): ?array {
+        $token = bin2hex(random_bytes(32));
+        $expiracion = (new DateTimeImmutable('now'))
+            ->modify('+' . max(1, $minutosVigencia) . ' minutes')
+            ->format('Y-m-d H:i:s');
+
+        $sql = "UPDATE usuarios
+                SET token_recuperacion = :token, token_expiracion = :expiracion
+                WHERE id_usuario = :id_usuario AND activo = 1";
         $stmt = $this->db->prepare($sql);
-        return $stmt->execute([
-            ':token'      => $token,
+        $stmt->execute([
+            ':token' => hash('sha256', $token),
             ':expiracion' => $expiracion,
-            ':correo'     => $correo
+            ':id_usuario' => $idUsuario,
         ]);
+
+        return $stmt->rowCount() === 1
+            ? ['token' => $token, 'expiracion' => $expiracion]
+            : null;
     }
 
     public function validarToken(string $token): ?array {
@@ -95,7 +106,7 @@ class Usuario {
                   AND token_expiracion > NOW() 
                   AND activo = 1 LIMIT 1";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':token' => $token]);
+        $stmt->execute([':token' => hash('sha256', $token)]);
         $res = $stmt->fetch();
         return $res ?: null;
     }
@@ -109,6 +120,23 @@ class Usuario {
             ':password_hash' => password_hash($nuevaPassword, PASSWORD_BCRYPT),
             ':id_usuario'    => $id_usuario
         ]);
+    }
+
+    /** Restablece la contraseña y consume el token en una única operación. */
+    public function reestablecerPasswordConToken(string $token, string $nuevaPassword): bool {
+        $sql = "UPDATE usuarios
+                SET password_hash = :password_hash,
+                    token_recuperacion = NULL,
+                    token_expiracion = NULL
+                WHERE token_recuperacion = :token
+                  AND token_expiracion > NOW()
+                  AND activo = 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            ':password_hash' => password_hash($nuevaPassword, PASSWORD_BCRYPT),
+            ':token' => hash('sha256', $token),
+        ]);
+        return $stmt->rowCount() === 1;
     }
 
     public function existeCorreoOCI(string $correo, string $ci, ?int $excluirId = null): bool {

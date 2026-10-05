@@ -3,6 +3,19 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 class CertificadoPdfService {
     public function generar(array $plantilla, array $certificado): string {
+        $pdf = $this->renderizar($plantilla, $certificado);
+        $dir = __DIR__ . '/../storage/certificados/'; if (!is_dir($dir)) mkdir($dir, 0755, true);
+        $ruta = basename($certificado['codigo_unico']) . '.pdf';
+        $pdf->Output('F', $dir . $ruta);
+        return $ruta;
+    }
+
+    /** Renderiza un PDF temporal para el editor sin crear certificados ni archivos. */
+    public function generarVistaPrevia(array $plantilla, array $datosMuestra): string {
+        return $this->renderizar($plantilla, $datosMuestra)->Output('S');
+    }
+
+    private function renderizar(array $plantilla, array $certificado): \setasign\Fpdi\Fpdi {
         $origen = __DIR__ . '/../storage/plantillas_certificado/' . basename($plantilla['ruta_archivo_pdf']);
         if (!is_file($origen)) throw new Exception('La plantilla configurada no está disponible en el almacenamiento.');
         $pdf = new \setasign\Fpdi\Fpdi();
@@ -22,6 +35,7 @@ class CertificadoPdfService {
             'evento' => $certificado['evento_titulo'],
             'horas' => $certificado['horas_academicas'] . ' horas académicas',
             'fechas' => 'Del ' . date('d/m/Y', strtotime($certificado['fecha_inicio'])) . ' al ' . date('d/m/Y', strtotime($certificado['fecha_fin'])),
+            'rol_expositor' => $certificado['rol_expositor'] ?? '',
             'codigo' => $certificado['codigo_unico'],
             'validacion' => 'Verifique: ' . ($certificado['codigo_qr'] ?? '')
         ];
@@ -48,10 +62,7 @@ class CertificadoPdfService {
         if (is_array($qr) && !empty($qr['activo']) && !empty($certificado['codigo_qr'])) {
             $this->insertarQr($pdf, $certificado['codigo_qr'], $qr, $escalaX, $escalaY);
         }
-        $dir = __DIR__ . '/../storage/certificados/'; if (!is_dir($dir)) mkdir($dir, 0755, true);
-        $ruta = basename($certificado['codigo_unico']) . '.pdf';
-        $pdf->Output('F', $dir . $ruta);
-        return $ruta;
+        return $pdf;
     }
     private function texto(string $texto): string { return iconv('UTF-8', 'windows-1252//TRANSLIT', $texto) ?: $texto; }
 

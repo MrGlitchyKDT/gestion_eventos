@@ -1,5 +1,5 @@
 <?php 
-$titulo_pagina = "Registro de Participante — UAB DIE";
+$titulo_pagina = "Registro de Participante — CERT-DIE";
 $esAuth = true;
 $esLogin = true;
 require_once __DIR__ . '/../layouts/header.php'; 

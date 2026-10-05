@@ -4,6 +4,7 @@ require_once __DIR__ . '/../models/Evento.php';
 require_once __DIR__ . '/../models/SesionEvento.php';
 require_once __DIR__ . '/../models/Inscripcion.php';
 require_once __DIR__ . '/../models/Asistencia.php';
+require_once __DIR__ . '/../models/Material.php';
 require_once __DIR__ . '/../models/Auditoria.php';
 require_once __DIR__ . '/../helpers/AuthHelper.php';
 
@@ -12,12 +13,14 @@ class ExpositorController {
     private SesionEvento $sesionModel;
     private Inscripcion $inscripcionModel;
     private Asistencia $asistenciaModel;
+    private Material $materialModel;
 
     public function __construct() {
         $this->eventoModel = new Evento();
         $this->sesionModel = new SesionEvento();
         $this->inscripcionModel = new Inscripcion();
         $this->asistenciaModel = new Asistencia();
+        $this->materialModel = new Material();
     }
 
     /**
@@ -28,9 +31,51 @@ class ExpositorController {
         $usuario = AuthHelper::obtenerUsuario();
 
         $eventos = $this->eventoModel->listarPorExpositor((int)$usuario['id_usuario']);
+        $materialesPorEvento = $this->materialModel->listarAgrupadosPorEventos(array_column($eventos, 'id_evento'));
 
         // Vista de eventos asignados
         require_once __DIR__ . '/../views/expositor/mis_eventos.php';
+    }
+
+    /** Permite al expositor asignado publicar materiales para participantes. */
+    public function subirMateriales(): void {
+        AuthHelper::requerirRol(['EXPOSITOR', 'ADMINISTRADOR']);
+        $usuario = AuthHelper::obtenerUsuario();
+        $idEvento = filter_input(INPUT_POST, 'id_evento', FILTER_VALIDATE_INT);
+
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null) || !$idEvento) {
+                throw new InvalidArgumentException('La solicitud de carga de material no es válida.');
+            }
+
+            $idsAutorizados = array_map('intval', array_column($this->eventosAutorizados($usuario), 'id_evento'));
+            if (!in_array($idEvento, $idsAutorizados, true)) {
+                throw new RuntimeException('No tiene permiso para publicar materiales en este evento.');
+            }
+
+            $archivos = $_FILES['materiales'] ?? [];
+            if (empty($archivos['name']) || (is_array($archivos['name']) && !array_filter($archivos['name']))) {
+                throw new InvalidArgumentException('Seleccione al menos un archivo para publicar.');
+            }
+
+            $cantidad = $this->materialModel->subirMultiples($idEvento, (int)$usuario['id_usuario'], $archivos);
+            if ($cantidad < 1) {
+                throw new RuntimeException('No se recibió ningún archivo válido.');
+            }
+
+            Auditoria::registrar(
+                (int)$usuario['id_usuario'],
+                'SUBIR_MATERIAL_EVENTO',
+                'MATERIALES_EVENTO',
+                "Se publicaron {$cantidad} material(es) para el evento #{$idEvento}"
+            );
+            $_SESSION['success'] = "Se publicaron {$cantidad} material(es) para los participantes.";
+        } catch (Throwable $e) {
+            $_SESSION['error'] = $e->getMessage();
+        }
+
+        header('Location: index.php?action=expositor_eventos#evento-' . (int)$idEvento, true, 303);
+        exit();
     }
 
     /**

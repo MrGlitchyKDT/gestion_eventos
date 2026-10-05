@@ -1,13 +1,16 @@
 <?php
 // controllers/AuthController.php
 require_once __DIR__ . '/../models/Usuario.php';
+require_once __DIR__ . '/../models/SolicitudRecuperacionPassword.php';
 require_once __DIR__ . '/../helpers/AuthHelper.php';
 
 class AuthController {
     private Usuario $usuarioModel;
+    private SolicitudRecuperacionPassword $solicitudRecuperacionModel;
 
     public function __construct() {
         $this->usuarioModel = new Usuario();
+        $this->solicitudRecuperacionModel = new SolicitudRecuperacionPassword();
     }
 
     /**
@@ -165,20 +168,86 @@ class AuthController {
     }
 
     /**
-     * RF-04: Generar token de recuperación
+     * Pantalla pública para comprobar un enlace de recuperación asistida.
      */
+    public function reestablecer(): void {
+        AuthHelper::initSession();
+        $token = is_string($_GET['token'] ?? null) ? trim($_GET['token']) : '';
+        $usuario = preg_match('/^[a-f0-9]{64}$/', $token)
+            ? $this->usuarioModel->validarToken($token)
+            : null;
+
+        if (!$usuario) {
+            $_SESSION['error'] = 'El enlace de recuperación no es válido, ya fue utilizado o expiró.';
+            header('Location: index.php?action=recuperar', true, 303);
+            exit();
+        }
+
+        $tokenRecuperacion = $token;
+        require_once __DIR__ . '/../views/auth/reestablecer.php';
+    }
+
+    /** Procesa el cambio de contraseña mediante un enlace de un solo uso. */
+    public function doReestablecer(): void {
+        AuthHelper::initSession();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $this->errorAcceso('La sesión del formulario expiró. Solicite un nuevo enlace de recuperación.', 'recuperar');
+        }
+
+        $token = is_string($_POST['token'] ?? null) ? trim($_POST['token']) : '';
+        $password = $this->campo('password');
+        $confirmacion = $this->campo('password_confirm');
+
+        if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
+            $this->errorAcceso('El enlace de recuperación no es válido.', 'recuperar');
+        }
+        if (mb_strlen($password) < 8 || strlen($password) > 72) {
+            $this->errorAcceso('La contraseña debe tener entre 8 y 72 caracteres.', 'recuperar');
+        }
+        if (!hash_equals($password, $confirmacion)) {
+            $this->errorAcceso('Las contraseñas no coinciden.', 'recuperar');
+        }
+
+        try {
+            $actualizada = $this->usuarioModel->reestablecerPasswordConToken($token, $password);
+        } catch (PDOException $e) {
+            error_log('Error al restablecer contraseña: ' . $e->getMessage());
+            $actualizada = false;
+        }
+
+        if (!$actualizada) {
+            $this->errorAcceso('El enlace de recuperación no es válido, ya fue utilizado o expiró.', 'recuperar');
+        }
+
+        unset($_SESSION['csrf_token']);
+        $_SESSION['success'] = 'Su contraseña fue actualizada. Ya puede iniciar sesión.';
+        header('Location: index.php?action=login', true, 303);
+        exit();
+    }
+
+    /** Registra una solicitud para revisión; nunca revela si la cuenta existe. */
     public function doRecuperar(): void {
         AuthHelper::initSession();
-        $correo = trim($_POST['correo'] ?? '');
 
-        if (!empty($correo)) {
-            $token = bin2hex(random_bytes(32));
-            $expira = date('Y-m-d H:i:s', strtotime('+1 hour'));
-            $this->usuarioModel->guardarTokenRecuperacion($correo, $token, $expira);
-            // Simulación de envío: en producción se enviaría por correo electrónico
-            $_SESSION['success'] = "Si el correo coincide con nuestros registros, recibirá las instrucciones para reestablecer su acceso.";
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $this->errorAcceso('La sesión del formulario expiró. Intente nuevamente.', 'recuperar');
         }
-        header('Location: index.php?action=recuperar');
+
+        $identificador = trim($this->campo('identificador'));
+        if ($identificador === '' || mb_strlen($identificador) > 150) {
+            $this->errorAcceso('Ingrese su correo institucional o número de CI.', 'recuperar');
+        }
+
+        try {
+            $this->solicitudRecuperacionModel->solicitar($identificador);
+        } catch (Throwable $e) {
+            error_log('Error al registrar solicitud de recuperación: ' . $e->getMessage());
+            $this->errorAcceso('No fue posible registrar la solicitud. Intente nuevamente.', 'recuperar');
+        }
+
+        $_SESSION['success'] = 'Si los datos corresponden a una cuenta activa, la solicitud fue enviada al buzón de administración. Presente su documento de identidad para verificarla.';
+        header('Location: index.php?action=recuperar', true, 303);
         exit();
     }
 }

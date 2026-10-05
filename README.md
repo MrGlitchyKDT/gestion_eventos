@@ -1,4 +1,4 @@
-# Sistema de Gestión de Eventos Académicos y Certificaciones — UAB DIE
+# Sistema de Gestión de Eventos Académicos y Certificaciones — CERT-DIE
 
 Plataforma web integral para administrar eventos académicos, controlar cupos, registrar asistencia por sesiones y emitir certificados digitales verificables. Está desarrollada con el patrón **MVC (Modelo-Vista-Controlador)** en **PHP orientado a objetos**, **MySQL/MariaDB** y **Bootstrap 5.3**.
 
@@ -10,7 +10,7 @@ Plataforma web integral para administrar eventos académicos, controlar cupos, r
 * **Transaccionalidad y Bloqueo Pesimista:** Control de cupos con concurrencia segura mediante `SELECT ... FOR UPDATE` en MySQL para evitar sobreinscripciones simultáneas.
 * **Certificados PDF por plantilla:** El administrador carga una plantilla PDF para cada evento, ajusta visualmente los campos y emite documentos individuales con folio y QR verificable.
 * **Asistencia por ventanas de sesión:** El docente abre y cierra una ventana temporal; los participantes inscritos confirman su propia presencia de forma segura y el sistema consolida el porcentaje al cerrarla.
-* **Motor Analítico y Reportería:** Exportación de padrones, listas de asistencia y eventos a archivos CSV compatibles con Microsoft Excel mediante streaming HTTP y codificación UTF-8 BOM.
+* **Motor Analítico y Reportería:** Resumen mensual por áreas con gráfico circular local, detalle por evento y sesión, certificados filtrables por certificado y exportaciones CSV o PDF mediante streaming HTTP.
 * **Diseño Responsivo e Institucional:** Cabecera azul institucional unificada, navegación horizontal por rol y menú lateral `offcanvas` en móvil. Los modales de eventos conservan sus acciones visibles y permiten desplazamiento en pantallas reducidas.
 
 ---
@@ -47,6 +47,7 @@ La autenticación consulta `usuarios` y `roles` mediante PDO, valida la contrase
 * Los controladores verifican los roles permitidos. El administrador conserva el acceso adicional a las áreas de participante y expositor; estos dos roles no acceden al panel administrativo ni al área privada del otro.
 * El registro público asigna exclusivamente `PARTICIPANTE`, resuelto desde la tabla `roles`, y verifica la confirmación de contraseña.
 * Inicio de sesión, registro y cierre de sesión usan formularios POST con token CSRF. Para salir se utiliza **Cerrar sesión** desde el menú de perfil de la cabecera.
+* La recuperación de contraseña es asistida: el usuario solicita apoyo a administración, que verifica su identidad y genera desde **Gestión de Usuarios** un enlace personal de un solo uso, válido por una hora. El token se guarda como hash SHA-256 y nunca se registra en la auditoría.
 * PHP requiere las extensiones `pdo_mysql`, `mbstring` y `fileinfo`. La conexión se configura en `config/Database.php`.
 * Las dependencias PHP se instalan desde el archivo `composer.json`. En un entorno nuevo, ejecute `composer install` desde la raíz del proyecto.
 * Las dependencias de interfaz están en `public/assets/vendor`; el encabezado y el pie de página no requieren conexión a CDN para cargar Bootstrap, sus iconos ni las fuentes.
@@ -57,6 +58,12 @@ Desde la carpeta `gestion_eventos`, con MySQL iniciado:
 
 ```powershell
 python tests/auth_http.py --php C:/xampp/php/php.exe
+```
+
+Para comprobar el ciclo de un enlace asistido sin persistir cambios en la base de datos:
+
+```powershell
+C:/xampp/php/php.exe tests/recovery_token.php
 ```
 
 La suite usa Python estándar y un servidor PHP local temporal. Comprueba los tres roles, permisos, credenciales inválidas, CSRF, cierre de sesión, registro y cambios de rol o estado durante una sesión. Requiere permiso para crear tablas temporales en la base configurada; utiliza cuentas sintéticas y una transacción de solo lectura para las tablas permanentes. Las sesiones y los datos de prueba se eliminan al terminar.
@@ -75,9 +82,9 @@ El administrador inicia en `admin_dashboard`, una pantalla breve de acceso a los
 * Asignar expositores activos a un evento, indicar su función y retirar asignaciones cuando sea necesario.
 * Registrar sesiones únicas o series recurrentes para cursos. Una serie puede repetirse por días de la semana o cada cierto número de días, muestra una vista previa y genera las sesiones individuales necesarias para la asistencia.
 * Configurar tipos y áreas de eventos. Los registros sin eventos asociados se eliminan; los que forman parte del historial se desactivan.
-* Gestionar usuarios, roles, estados de cuentas, inscripciones administrativas y reportes CSV.
-* Cargar una plantilla PDF por evento, editar visualmente las posiciones de sus campos y emitir o regenerar certificados PDF para participantes habilitados.
-* Consultar los diez últimos registros de auditoría en Reportes y abrir una vista paginada con el historial administrativo completo.
+* Gestionar usuarios, roles, estados de cuentas, inscripciones administrativas, enlaces asistidos de recuperación y reportes CSV.
+* Cargar varias plantillas PDF por evento, indicar si se destinan a participantes, expositores o ambos, editar visualmente sus posiciones y emitir o regenerar certificados PDF para cada destinatario.
+* Consultar en Reportes la distribución mensual de eventos por área, cursos habilitados, listas de asistencia descargables por sesión en CSV o PDF, y certificaciones filtrables por certificado en CSV o PDF, además de la auditoría reciente.
 * Las operaciones relevantes de eventos, materiales, sesiones y asignaciones de expositores se registran en `auditoria_actividad`.
 
 ### Participante
@@ -91,6 +98,7 @@ El administrador inicia en `admin_dashboard`, una pantalla breve de acceso a los
 ### Expositor
 
 * Consultar directamente sus eventos asignados desde la cabecera.
+* Publicar varios materiales académicos para participantes inscritos en los eventos asignados. Se validan los formatos PDF, ZIP, RAR, PPTX, DOCX, XLSX y TXT, con un máximo de 20 MB por archivo.
 * Abrir la asistencia de una sesión asignada por 15, 30, 45, 60, 90 o 120 minutos y cerrarla cuando finalice.
 * Consultar las confirmaciones de los participantes y, después del cierre, corregir cada registro como **Presente**, **Justificado** o **Falta**.
 * Imprimir la planilla actual o exportar un CSV detallado de todas las sesiones del evento.
@@ -103,7 +111,7 @@ La interfaz emplea una cabecera azul institucional común a las áreas autentica
 | Rol | Accesos principales en la cabecera |
 | :--- | :--- |
 | `ADMINISTRADOR` | Inicio, Gestión de Eventos, Gestión de Usuarios, Reportes, Configuración y perfil |
-| `EXPOSITOR` | Mis eventos, Asistencia y perfil |
+| `EXPOSITOR` | Mis eventos, Asistencia, Certificados y perfil |
 | `PARTICIPANTE` | Inicio, Seminarios, Certificados y perfil |
 
 En móvil, los accesos se muestran en un panel lateral derecho. Los menús desplegables tienen transición visual y se cierran correctamente. La cabecera se mantiene sobre el contenido ordinario, pero queda debajo de los modales de Bootstrap para que los formularios de eventos y el editor de certificados cubran correctamente la pantalla.
@@ -126,32 +134,34 @@ Las series de cursos se almacenan en `series_sesiones_evento` y sus días semana
 
 La tabla `asistencias` mantiene un único registro por combinación de sesión e inscripción y conserva el origen del registro. El participante sólo puede crear su propio registro `PRESENTE` durante una ventana vigente, con inscripción `INSCRITO`; el cierre de la sesión consolida el porcentaje. El docente y el administrador pueden corregir la lista ya cerrada como `PRESENTE`, `JUSTIFICADO` o `FALTA`. Sólo las sesiones `CONCLUIDA` forman parte del cálculo de `porcentaje_asistencia` y de `habilitado_certificado`; `PRESENTE` y `JUSTIFICADO` cuentan para el mínimo configurado.
 
-### Certificados con plantilla PDF
+### Certificados con plantillas PDF
 
-La tabla `plantillas_certificado` contiene una plantilla activa por evento, su página de trabajo, el usuario que la cargó y `configuracion_campos`. La plantilla y los certificados finales se almacenan fuera de `public`, en `storage/plantillas_certificado/` y `storage/certificados/`.
+La tabla `plantillas_certificado` permite varias plantillas activas por evento. Cada una registra un nombre identificable, su destinatario (`PARTICIPANTE`, `EXPOSITOR` o `AMBOS`), la página de trabajo, el usuario que la cargó y `configuracion_campos`. La plantilla y los certificados finales se almacenan fuera de `public`, en `storage/plantillas_certificado/` y `storage/certificados/`.
 
 El flujo administrativo es el siguiente:
 
 1. Desde el botón de diploma de **Gestión de Eventos**, el administrador abre la gestión de certificados del evento.
-2. Carga un PDF de hasta 10 MB y selecciona la página que se utilizará como fondo.
-3. Abre **Editar posiciones** y arrastra las etiquetas de nombre, CI, evento, horas, fechas, folio, URL y QR sobre la plantilla.
-4. Al guardar, se persisten las coordenadas y el tamaño real de la página PDF. Las configuraciones antiguas se mantienen compatibles y se migran al guardar de nuevo el diseño.
-5. Sólo se habilita la emisión para inscripciones activas que tienen `habilitado_certificado = 1`.
-6. FPDI importa la página de plantilla; FPDF superpone los datos, el folio y el QR. La ruta generada se guarda en `certificados.ruta_archivo_pdf` y la URL pública de verificación en `codigo_qr`.
-7. Los certificados ya emitidos se pueden abrir, imprimir o regenerar con el diseño actualizado. La descarga está autorizada únicamente para el administrador o el titular.
+2. Carga uno o varios PDF de hasta 10 MB, asigna un nombre y destinatario a cada plantilla y selecciona la página que se utilizará como fondo.
+3. Selecciona la plantilla que desea configurar o utilizar para emitir. Puede archivarla sin eliminar certificados históricos.
+4. Abre **Editar posiciones** y arrastra las etiquetas de nombre, CI, evento, horas, fechas, función del expositor, folio, URL y QR sobre la plantilla.
+5. Al guardar, se persisten las coordenadas y el tamaño real de la página PDF. Las configuraciones antiguas se mantienen compatibles y se migran al guardar de nuevo el diseño.
+6. Las plantillas para participantes muestran sólo inscripciones habilitadas; las de expositores muestran sólo usuarios asignados al evento. Una misma persona puede recibir un certificado por cada plantilla escogida.
+7. FPDI importa la página de plantilla; FPDF superpone los datos, el folio y el QR. La ruta generada se guarda en `certificados.ruta_archivo_pdf`, la plantilla usada en `certificados.id_plantilla` y la URL pública de verificación en `codigo_qr`.
+8. Los certificados ya emitidos se pueden abrir, imprimir o regenerar con el diseño de su propia plantilla, aun cuando esa plantilla haya sido archivada. La descarga está autorizada únicamente para el administrador o el titular.
 
 La validación pública se mantiene en `verificar_certificado` mediante `codigo_unico` y el contenido del QR. La anulación conserva el historial en la tabla `certificados`.
 
 ## Seguridad aplicada
 
 * Contraseñas con `password_hash()` y validación con `password_verify()`.
+* Los enlaces de recuperación se invalidan al vencer o al usarse; el cambio de contraseña y el consumo del token se realizan en una sola actualización de base de datos.
 * Sentencias PDO preparadas para las consultas con datos externos.
 * Sesiones con regeneración de identificador al autenticarse, cookies `HttpOnly`, `SameSite=Lax` y verificación del rol y estado de cuenta en cada petición.
 * Tokens CSRF para acceso, registro, cierre de sesión, operaciones administrativas y apertura, cierre o confirmación de asistencia.
 * Validación de tipo por extensión y MIME, tamaño máximo y nombre interno aleatorio para archivos adjuntos.
 * Verificación de pertenencia del participante a la inscripción, de la ventana horaria en el servidor, de registro único por sesión y de la asignación del expositor antes de guardar asistencia.
 * Plantillas y certificados PDF fuera del directorio público; el administrador es el único rol que puede ver la plantilla y editar sus posiciones.
-* La emisión verifica que el evento tenga plantilla activa, que emita certificados y que el participante esté habilitado.
+* La emisión verifica que la plantilla activa pertenezca al evento, que corresponda al destinatario, que el evento emita certificados y que el participante esté habilitado o el expositor esté asignado.
 
 ## Rutas destacadas
 
@@ -162,12 +172,15 @@ La validación pública se mantiene en `verificar_certificado` mediante `codigo_
 | `admin_evento_crear_sesion` / `admin_evento_eliminar_sesion` | Gestionar el cronograma |
 | `admin_evento_guardar_serie_sesiones` | Crear o editar una serie recurrente y generar sus sesiones futuras |
 | `admin_certificados` | Cargar plantilla, editar posiciones, emitir y consultar certificados de un evento |
-| `admin_plantilla_certificado_guardar` | Subir o reemplazar una plantilla PDF |
+| `admin_plantilla_certificado_guardar` / `admin_plantilla_certificado_archivar` | Agregar o archivar una plantilla PDF del evento |
 | `admin_plantilla_certificado_diseno` | Guardar posiciones del editor visual |
 | `admin_plantilla_certificado_ver` | Vista privada del PDF para el editor visual |
-| `admin_certificado_emitir_pdf` / `admin_certificado_regenerar_pdf` | Emitir o regenerar un certificado con la plantilla activa |
+| `admin_certificado_emitir_pdf` / `admin_certificado_emitir_expositor_pdf` / `admin_certificado_regenerar_pdf` | Emitir para participantes o expositores, o regenerar con la plantilla vinculada |
 | `descargar_certificado` | Abrir o imprimir el PDF autorizado del certificado |
-| `admin_reportes` | Exportaciones, las 10 actividades administrativas más recientes y el consolidado activo |
+| `admin_reportes` | Resumen mensual por áreas, detalle de asistencia por sesión, certificados por plantilla y auditoría reciente |
+| `admin_reporte_evento` | Página independiente con las sesiones y certificados de un evento |
+| `admin_reporte_asistencia_sesion` | Página independiente con la asistencia detallada de una sesión |
+| `admin_reporte_asistencia_pdf` / `admin_reporte_certificados_pdf` | Descargar en PDF la asistencia de una sesión o las certificaciones filtradas de un evento |
 | `admin_auditoria` | Consultar el historial administrativo completo con paginación |
 | `descargar_material` | Descarga protegida de un material de evento |
 | `expositor_asistencia` | Planilla filtrable de asistencia |

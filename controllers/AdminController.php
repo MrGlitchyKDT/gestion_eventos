@@ -6,6 +6,7 @@ require_once __DIR__ . '/../models/Inscripcion.php';
 require_once __DIR__ . '/../models/Asistencia.php';
 require_once __DIR__ . '/../models/Certificado.php';
 require_once __DIR__ . '/../models/SolicitudReimpresion.php';
+require_once __DIR__ . '/../models/SolicitudRecuperacionPassword.php';
 require_once __DIR__ . '/../models/Auditoria.php';
 require_once __DIR__ . '/../helpers/AuthHelper.php';
 
@@ -17,6 +18,7 @@ class AdminController {
     private Asistencia $asistenciaModel;
     private Certificado $certificadoModel;
     private SolicitudReimpresion $reimpresionModel;
+    private SolicitudRecuperacionPassword $solicitudRecuperacionModel;
 
     public function __construct() {
         $this->db = Database::getConnection();
@@ -26,17 +28,116 @@ class AdminController {
         $this->asistenciaModel = new Asistencia();
         $this->certificadoModel = new Certificado();
         $this->reimpresionModel = new SolicitudReimpresion();
+        $this->solicitudRecuperacionModel = new SolicitudRecuperacionPassword();
     }
 
     /** Inicio administrativo con acceso a los módulos de gestión. */
     public function dashboard(): void {
         AuthHelper::requerirRol(['ADMINISTRADOR']);
+        $reimpresionesPendientes = $this->reimpresionModel->conteoPorEstado()['PENDIENTE'] ?? 0;
+        $recuperacionesPendientes = $this->solicitudRecuperacionModel->pendientes();
         require_once __DIR__ . '/../views/admin/dashboard.php';
+    }
+
+    /** Buzón administrativo de solicitudes públicas de recuperación de contraseña. */
+    public function solicitudesRecuperacion(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        $estado = strtoupper(trim((string)($_GET['estado'] ?? '')));
+        if (!in_array($estado, ['', 'PENDIENTE', 'APROBADA', 'RECHAZADA'], true)) $estado = '';
+        $solicitudesRecuperacion = $this->solicitudRecuperacionModel->listar($estado);
+        $recuperacionesPendientes = $this->solicitudRecuperacionModel->pendientes();
+        $enlaceRecuperacionBuzon = $_SESSION['enlace_recuperacion_buzon'] ?? null;
+        unset($_SESSION['enlace_recuperacion_buzon']);
+        require_once __DIR__ . '/../views/admin/recuperaciones/index.php';
+    }
+
+    /** Aprueba una petición y genera un enlace de un solo uso, o la rechaza con un motivo. */
+    public function resolverSolicitudRecuperacion(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'La solicitud de recuperación no es válida.';
+            header('Location: index.php?action=admin_solicitudes_recuperacion', true, 303);
+            exit();
+        }
+
+        $idSolicitud = filter_input(INPUT_POST, 'id_solicitud', FILTER_VALIDATE_INT);
+        $decision = strtoupper(trim((string)($_POST['decision'] ?? '')));
+        $motivo = trim((string)($_POST['motivo_rechazo'] ?? ''));
+        $admin = AuthHelper::obtenerUsuario();
+
+        try {
+            if (!$idSolicitud || !in_array($decision, ['APROBADA', 'RECHAZADA'], true)) throw new RuntimeException('Decisión inválida.');
+            if ($decision === 'RECHAZADA' && $motivo === '') throw new RuntimeException('Indique el motivo del rechazo.');
+            if (mb_strlen($motivo) > 1000) throw new RuntimeException('El motivo de rechazo no puede superar 1.000 caracteres.');
+            $solicitud = $this->solicitudRecuperacionModel->obtenerPendiente($idSolicitud);
+            if (!$solicitud || !(int)$solicitud['activo']) throw new RuntimeException('La solicitud ya fue atendida o la cuenta no está activa.');
+
+            if ($decision === 'APROBADA') {
+                $recuperacion = $this->usuarioModel->crearTokenRecuperacion((int)$solicitud['id_usuario']);
+                if (!$recuperacion) throw new RuntimeException('No fue posible crear el enlace temporal para esta cuenta.');
+                if (!$this->solicitudRecuperacionModel->resolver($idSolicitud, (int)$admin['id_usuario'], 'APROBADA')) throw new RuntimeException('La solicitud ya fue atendida.');
+                $protocolo = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                $host = preg_replace('/[^a-zA-Z0-9.:-]/', '', $_SERVER['HTTP_HOST'] ?? 'localhost');
+                $baseUrl = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+                $_SESSION['enlace_recuperacion_buzon'] = [
+                    'nombre' => trim($solicitud['nombres'] . ' ' . $solicitud['apellidos']),
+                    'correo' => $solicitud['correo'],
+                    'url' => $protocolo . '://' . $host . $baseUrl . '/index.php?action=reestablecer&token=' . rawurlencode($recuperacion['token']),
+                    'expiracion' => $recuperacion['expiracion'],
+                ];
+                $_SESSION['success'] = 'Solicitud aprobada. Verifique la identidad antes de entregar el enlace temporal.';
+                Auditoria::registrar((int)$admin['id_usuario'], 'APROBAR_SOLICITUD_RECUPERACION', 'USUARIOS', "Solicitud de recuperación #{$idSolicitud} aprobada para la cuenta #{$solicitud['id_usuario']}");
+            } else {
+                if (!$this->solicitudRecuperacionModel->resolver($idSolicitud, (int)$admin['id_usuario'], 'RECHAZADA', $motivo)) throw new RuntimeException('La solicitud ya fue atendida.');
+                $_SESSION['success'] = 'Solicitud de recuperación rechazada.';
+                Auditoria::registrar((int)$admin['id_usuario'], 'RECHAZAR_SOLICITUD_RECUPERACION', 'USUARIOS', "Solicitud de recuperación #{$idSolicitud} rechazada. Motivo: {$motivo}");
+            }
+        } catch (Throwable $e) {
+            $_SESSION['error'] = $e->getMessage();
+        }
+
+        header('Location: index.php?action=admin_solicitudes_recuperacion', true, 303);
+        exit();
     }
 
     /** Reportes, exportaciones y últimos movimientos administrativos. */
     public function reportes(): void {
         AuthHelper::requerirRol(['ADMINISTRADOR']);
+        require_once __DIR__ . '/ReporteController.php';
+        $reporteController = new ReporteController();
+        $filtrosReporte = $reporteController->normalizarFiltros($_GET);
+        // Los filtros del resumen son independientes de los del listado
+        // "Reportes por evento".
+        $filtrosResumen = $reporteController->normalizarFiltrosResumen($_GET);
+        $idEventoSolicitado = filter_input(INPUT_GET, 'id_evento', FILTER_VALIDATE_INT);
+        if ($idEventoSolicitado) {
+            $destino = 'index.php?action=' . (filter_input(INPUT_GET, 'id_sesion', FILTER_VALIDATE_INT) ? 'admin_reporte_asistencia_sesion' : 'admin_reporte_evento');
+            $destino .= '&id_evento=' . (int)$idEventoSolicitado;
+            if ($idSesion = filter_input(INPUT_GET, 'id_sesion', FILTER_VALIDATE_INT)) $destino .= '&id_sesion=' . (int)$idSesion;
+            $filtrosEnlace = [];
+            if ($filtrosReporte['id_categoria']) $filtrosEnlace['id_categoria'] = $filtrosReporte['id_categoria'];
+            if ($filtrosReporte['id_tipo_evento']) $filtrosEnlace['id_tipo_evento'] = $filtrosReporte['id_tipo_evento'];
+            if ($filtrosReporte['habilitado']) $filtrosEnlace['habilitado'] = $filtrosReporte['habilitado'];
+            if ($filtrosReporte['buscar'] !== '') $filtrosEnlace['buscar'] = $filtrosReporte['buscar'];
+            if ($filtrosReporte['fecha_desde']) $filtrosEnlace['fecha_desde'] = $filtrosReporte['fecha_desde'];
+            if ($filtrosReporte['fecha_hasta']) $filtrosEnlace['fecha_hasta'] = $filtrosReporte['fecha_hasta'];
+            if ($filtrosEnlace) $destino .= '&' . http_build_query($filtrosEnlace);
+            header('Location: ' . $destino);
+            exit();
+        }
+        $areasReporte = $reporteController->listarAreas();
+        $tiposReporte = $reporteController->listarTipos();
+        $resumenAreas = $reporteController->resumenPorAreas($filtrosResumen);
+        $resumenTipos = $reporteController->resumenPorTipos($filtrosResumen);
+        $eventosReporte = $reporteController->eventosDelPeriodo($filtrosReporte);
+        $cursosHabilitados = array_sum(array_map(static fn(array $fila): int => (int)$fila['cursos_habilitados'], $resumenAreas));
+
+        // Los detalles viven en rutas independientes para no sobrecargar el resumen.
+        $eventoDetalle = null;
+        $sesionesReporte = [];
+        $certificadosReporte = [];
+        $sesionDetalle = null;
+        $asistenciaSesionReporte = [];
         $ultimasAuditorias = (new Auditoria())->listar(10, 0);
         require_once __DIR__ . '/../views/admin/reportes/index.php';
     }
@@ -64,23 +165,43 @@ class AdminController {
         AuthHelper::requerirRol(['ADMINISTRADOR']);
 
         $rolFiltro = filter_input(INPUT_GET, 'rol', FILTER_VALIDATE_INT);
+        $buscarUsuario = mb_substr(trim((string)($_GET['buscar'] ?? '')), 0, 150);
+        $ciUsuario = mb_substr(trim((string)($_GET['ci'] ?? '')), 0, 25);
+        $estadoUsuario = strtoupper(trim((string)($_GET['estado'] ?? '')));
+        if (!in_array($estadoUsuario, ['ACTIVO', 'INACTIVO'], true)) $estadoUsuario = '';
         $sql = "SELECT u.id_usuario, u.ci, u.nombres, u.apellidos, u.correo, u.telefono, u.activo, u.fecha_registro, r.id_rol, r.nombre AS rol_nombre
                 FROM usuarios u
                 INNER JOIN roles r ON u.id_rol = r.id_rol";
-        
+        $where = [];
+        $params = [];
         if ($rolFiltro) {
-            $sql .= " WHERE u.id_rol = :rol";
+            $where[] = 'u.id_rol = :rol';
+            $params[':rol'] = $rolFiltro;
         }
+        if ($buscarUsuario !== '') {
+            // Con prepares nativos de MySQL cada marcador debe ser único.
+            $where[] = '(u.nombres LIKE :buscar_nombres OR u.apellidos LIKE :buscar_apellidos)';
+            $params[':buscar_nombres'] = '%' . $buscarUsuario . '%';
+            $params[':buscar_apellidos'] = '%' . $buscarUsuario . '%';
+        }
+        if ($ciUsuario !== '') {
+            $where[] = 'u.ci LIKE :ci';
+            $params[':ci'] = '%' . $ciUsuario . '%';
+        }
+        if ($estadoUsuario !== '') {
+            $where[] = 'u.activo = :activo';
+            $params[':activo'] = $estadoUsuario === 'ACTIVO' ? 1 : 0;
+        }
+        if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
         $sql .= " ORDER BY u.fecha_registro DESC";
 
         $stmt = $this->db->prepare($sql);
-        if ($rolFiltro) {
-            $stmt->execute([':rol' => $rolFiltro]);
-        } else {
-            $stmt->execute();
-        }
+        $stmt->execute($params);
         $usuarios = $stmt->fetchAll();
         $roles = $this->db->query("SELECT * FROM roles ORDER BY id_rol ASC")->fetchAll();
+        $filtrosUsuarios = ['rol' => $rolFiltro ?: null, 'buscar' => $buscarUsuario, 'ci' => $ciUsuario, 'estado' => $estadoUsuario];
+        $enlaceRecuperacion = $_SESSION['enlace_recuperacion_asistida'] ?? null;
+        unset($_SESSION['enlace_recuperacion_asistida']);
 
         require_once __DIR__ . '/../views/admin/usuarios/index.php';
     }
@@ -162,6 +283,61 @@ class AdminController {
         }
 
         header('Location: index.php?action=admin_usuarios');
+        exit();
+    }
+
+    /** Genera un enlace temporal que el administrador entrega tras verificar identidad. */
+    public function generarEnlaceRecuperacion(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar la solicitud de recuperación.';
+            header('Location: index.php?action=admin_usuarios', true, 303);
+            exit();
+        }
+
+        $idUsuario = filter_input(INPUT_POST, 'id_usuario', FILTER_VALIDATE_INT);
+        $admin = AuthHelper::obtenerUsuario();
+        $usuario = $idUsuario ? $this->usuarioModel->obtenerPorId($idUsuario) : null;
+
+        if (!$usuario || (int)$usuario['activo'] !== 1) {
+            $_SESSION['error'] = 'Sólo puede generar enlaces para cuentas activas.';
+            header('Location: index.php?action=admin_usuarios', true, 303);
+            exit();
+        }
+
+        try {
+            $recuperacion = $this->usuarioModel->crearTokenRecuperacion((int)$usuario['id_usuario']);
+            if (!$recuperacion) {
+                throw new RuntimeException('No fue posible crear el enlace de recuperación.');
+            }
+
+            $protocolo = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $host = preg_replace('/[^a-zA-Z0-9.:-]/', '', $_SERVER['HTTP_HOST'] ?? 'localhost');
+            $baseUrl = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+            $enlace = $protocolo . '://' . $host . $baseUrl
+                . '/index.php?action=reestablecer&token=' . rawurlencode($recuperacion['token']);
+
+            $_SESSION['enlace_recuperacion_asistida'] = [
+                'nombre' => trim($usuario['nombres'] . ' ' . $usuario['apellidos']),
+                'correo' => $usuario['correo'],
+                'url' => $enlace,
+                'expiracion' => $recuperacion['expiracion'],
+            ];
+            $_SESSION['success'] = 'Enlace de recuperación generado. Entréguelo sólo después de verificar la identidad del usuario.';
+
+            Auditoria::registrar(
+                (int)$admin['id_usuario'],
+                'GENERAR_ENLACE_RECUPERACION',
+                'USUARIOS',
+                "Se generó un enlace temporal de recuperación para la cuenta ID #{$usuario['id_usuario']}"
+            );
+        } catch (Throwable $e) {
+            error_log('Error al generar enlace de recuperación: ' . $e->getMessage());
+            $_SESSION['error'] = 'No fue posible generar el enlace de recuperación. Intente nuevamente.';
+        }
+
+        header('Location: index.php?action=admin_usuarios', true, 303);
         exit();
     }
 

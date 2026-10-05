@@ -26,7 +26,7 @@ $stylesVersion = @filemtime(__DIR__ . '/../../public/assets/css/styles.css') ?: 
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <title>
-    <?= htmlspecialchars($titulo_pagina ?? 'UAB DIE — Sistema de Gestión') ?>
+    <?= htmlspecialchars($titulo_pagina ?? 'CERT-DIE — Sistema de Gestión') ?>
   </title>
 
   <!-- Dependencias locales: permiten operar sin CDN. -->
@@ -56,20 +56,19 @@ $stylesVersion = @filemtime(__DIR__ . '/../../public/assets/css/styles.css') ?: 
         class="auth-header-brand text-decoration-none"
       >
 
-        <img
-          src="<?= htmlspecialchars($baseUrl) ?>/assets/img/logo.png"
-          class="app-brand-logo"
-          alt="UAB DIE"
-        >
+        <span class="app-brand-identity" aria-hidden="true">
+          <img src="<?= htmlspecialchars($baseUrl) ?>/assets/img/logo.png" class="app-brand-logo app-brand-logo-uab" alt="">
+          <img src="<?= htmlspecialchars($baseUrl) ?>/assets/img/logo_DIE.png" class="app-brand-logo app-brand-logo-die" alt="">
+        </span>
 
-        <div>
+        <div class="app-brand-copy">
 
-          <div class="auth-header-title">
-            UAB DIE
+          <div class="auth-header-title" data-brand-title>
+            UABJB
           </div>
 
-          <div class="auth-header-subtitle">
-            Universidad Autónoma del Beni
+          <div class="auth-header-subtitle" data-brand-subtitle>
+            Universidad Autonoma del Beni &quot;Jose Ballivian&quot;
           </div>
 
         </div>
@@ -94,5 +93,30 @@ $stylesVersion = @filemtime(__DIR__ . '/../../public/assets/css/styles.css') ?: 
   </div>
 
 </header>
+
+<script>
+(() => {
+  const marcas = document.querySelectorAll('.auth-header-brand');
+  const datos = {
+    uab: { titulo: 'UABJB', subtitulo: 'Universidad Autonoma del Beni "Jose Ballivian"' },
+    die: { titulo: 'DIE-CERT', subtitulo: 'Direccion de Investigación y Extensión de Pregrado' }
+  };
+  marcas.forEach((marca) => {
+    let esDie = false;
+    window.setInterval(() => {
+      esDie = !esDie;
+      const siguiente = esDie ? datos.die : datos.uab;
+      const copia = marca.querySelector('.app-brand-copy');
+      copia.classList.add('app-brand-copy-changing');
+      window.setTimeout(() => {
+        marca.classList.toggle('app-brand-die-activo', esDie);
+        marca.querySelector('[data-brand-title]').textContent = siguiente.titulo;
+        marca.querySelector('[data-brand-subtitle]').textContent = siguiente.subtitulo;
+        copia.classList.remove('app-brand-copy-changing');
+      }, 180);
+    }, 6000);
+  });
+})();
+</script>
 
 <?php endif; ?>

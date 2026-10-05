@@ -1,13 +1,17 @@
 <?php 
-$titulo_pagina = "Mis Inscripciones — UAB DIE";
+$titulo_pagina = "Mis Inscripciones — CERT-DIE";
 $seccion_activa = "mis_inscripciones";
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/navbar.php'; 
 
 $db = Database::getConnection();
-$stmtCert = $db->prepare("SELECT id_inscripcion, codigo_unico FROM certificados WHERE id_usuario = ? AND estado = 'EMITIDO'");
+$stmtCert = $db->prepare("SELECT id_inscripcion, MIN(id_certificado) AS id_certificado, COUNT(*) AS total FROM certificados WHERE id_usuario = ? AND id_inscripcion IS NOT NULL AND estado = 'EMITIDO' GROUP BY id_inscripcion");
 $stmtCert->execute([(int)$usuario['id_usuario']]);
-$certificadosPorInscripcion = $stmtCert->fetchAll(PDO::FETCH_KEY_PAIR);
+$certificadosPorInscripcion = [];
+foreach ($stmtCert->fetchAll() as $certificado) {
+    $certificadosPorInscripcion[(int)$certificado['id_inscripcion']] = $certificado;
+}
+$totalCertificados = array_sum(array_column($certificadosPorInscripcion, 'total'));
 
 // Métricas del participante
 $totalActivas = 0;
@@ -38,7 +42,7 @@ $promedioAsistencia = !empty($inscripciones) ? round($sumaAsistencias / count($i
             </span>
             <h1 class="h3 fw-bold mb-1 text-white">Mis Actividades Académicas</h1>
             <p class="small text-white-50 mb-0">
-              Sigue tu porcentaje de asistencia, descarga tus certificados oficiales y gestiona tus cupos.
+              Sigue tu porcentaje de asistencia, consulta tus certificados emitidos y gestiona tus cupos.
             </p>
           </div>
 
@@ -53,7 +57,7 @@ $promedioAsistencia = !empty($inscripciones) ? round($sumaAsistencias / count($i
               </div>
               <div class="col-4">
                 <div class="p-2 rounded-3" style="background: rgba(255, 255, 255, 0.12); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2);">
-                  <span class="d-block display-6 fw-bold text-info lh-1"><?= count($certificadosPorInscripcion) ?></span>
+                  <span class="d-block display-6 fw-bold text-info lh-1"><?= $totalCertificados ?></span>
                   <span class="small text-white-50 text-uppercase tracking-wider" style="font-size: 0.65rem;">Certificados</span>
                 </div>
               </div>
@@ -128,7 +132,9 @@ $promedioAsistencia = !empty($inscripciones) ? round($sumaAsistencias / count($i
       <?php else: ?>
         <div class="row g-3" id="listaInscripciones">
           <?php foreach ($inscripciones as $ins): 
-            $codigoCertificado = $certificadosPorInscripcion[$ins['id_inscripcion']] ?? null;
+            $certificadoInscripcion = $certificadosPorInscripcion[(int)$ins['id_inscripcion']] ?? null;
+            $idCertificado = (int)($certificadoInscripcion['id_certificado'] ?? 0);
+            $cantidadCertificados = (int)($certificadoInscripcion['total'] ?? 0);
             $pct = (float)$ins['porcentaje_asistencia'];
             $estado = $ins['estado'];
 
@@ -191,10 +197,10 @@ $promedioAsistencia = !empty($inscripciones) ? round($sumaAsistencias / count($i
                   <div class="col-md-6 col-lg-4 text-lg-end">
                     <div class="d-flex flex-wrap gap-2 justify-content-lg-end align-items-center">
                       
-                      <!-- Certificado Digital -->
-                      <?php if ($codigoCertificado): ?>
-                        <a href="index.php?action=imprimir_certificado&codigo=<?= urlencode($codigoCertificado) ?>" target="_blank" class="btn btn-sm btn-uab-verde rounded-pill px-3 py-2 fw-semibold shadow-sm d-inline-flex align-items-center gap-1">
-                          <i class="bi bi-award-fill"></i> Ver Certificado
+                      <!-- Certificado: la entrega del participante se gestiona desde Mis certificados. -->
+                      <?php if ($idCertificado): ?>
+                        <a href="index.php?action=mis_certificados" class="btn btn-sm btn-uab-verde rounded-pill px-3 py-2 fw-semibold shadow-sm d-inline-flex align-items-center gap-1">
+                          <i class="bi bi-award-fill"></i> <?= $cantidadCertificados > 1 ? 'Mis certificados (' . $cantidadCertificados . ')' : 'Mis certificados' ?>
                         </a>
                       <?php elseif ((bool)$ins['habilitado_certificado']): ?>
                         <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill small">

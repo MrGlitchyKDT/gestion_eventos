@@ -172,8 +172,32 @@ class Evento {
         return $stmt->fetchAll();
     }
 
-    /** Lista todos los eventos para administración, incluidos borradores y finalizados. */
-    public function listarParaAdministracion(): array {
+    /** Lista todos los eventos administrativos con filtros por tipo, área, publicación y título. */
+    public function listarParaAdministracion(array $filtros = []): array {
+        $where = [];
+        $params = [];
+        $tipo = filter_var($filtros['id_tipo_evento'] ?? null, FILTER_VALIDATE_INT);
+        $area = filter_var($filtros['id_categoria'] ?? null, FILTER_VALIDATE_INT);
+        $buscar = mb_substr(trim((string)($filtros['buscar'] ?? '')), 0, 150);
+        $habilitado = strtoupper(trim((string)($filtros['habilitado'] ?? '')));
+
+        if ($tipo && $tipo > 0) {
+            $where[] = 'e.id_tipo_evento = :tipo';
+            $params[':tipo'] = (int)$tipo;
+        }
+        if ($area && $area > 0) {
+            $where[] = 'e.id_categoria = :area';
+            $params[':area'] = (int)$area;
+        }
+        if ($habilitado === 'SI') {
+            $where[] = "e.estado = 'PUBLICADO'";
+        } elseif ($habilitado === 'NO') {
+            $where[] = "e.estado <> 'PUBLICADO'";
+        }
+        if ($buscar !== '') {
+            $where[] = 'e.titulo LIKE :buscar';
+            $params[':buscar'] = '%' . $buscar . '%';
+        }
         $sql = "SELECT
                     e.*,
                     te.nombre AS tipo_evento_nombre,
@@ -182,9 +206,11 @@ class Evento {
                 FROM eventos e
                 INNER JOIN tipos_evento te ON e.id_tipo_evento = te.id_tipo_evento
                 INNER JOIN categorias c ON e.id_categoria = c.id_categoria
+                " . ($where ? 'WHERE ' . implode(' AND ', $where) : '') . "
                 ORDER BY e.fecha_creacion DESC";
-
-        return $this->db->query($sql)->fetchAll();
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
     }
 
     /**

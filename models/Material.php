@@ -146,6 +146,13 @@ class Material {
         return (bool)$stmt->fetchColumn();
     }
 
+    /** Verifica que el expositor esté asignado al evento del material. */
+    public function usuarioEsExpositorAsignado(int $idEvento, int $idUsuario): bool {
+        $stmt = $this->db->prepare('SELECT 1 FROM evento_expositores WHERE id_evento = :evento AND id_usuario = :usuario LIMIT 1');
+        $stmt->execute([':evento' => $idEvento, ':usuario' => $idUsuario]);
+        return (bool)$stmt->fetchColumn();
+    }
+
     public function rutaFisica(array $material): string {
         return $this->directorioAlmacenamiento() . basename((string)$material['ruta_archivo']);
     }

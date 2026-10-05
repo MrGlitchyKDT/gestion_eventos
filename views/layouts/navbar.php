@@ -5,6 +5,19 @@ AuthHelper::initSession();
 $usuarioNav = AuthHelper::obtenerUsuario();
 $rolNav = AuthHelper::obtenerRol();
 $inicioNav = $usuarioNav ? (AuthHelper::obtenerRutaInicio() ?? 'catalogo') : 'catalogo';
+$reimpresionesPendientesNav = 0;
+$recuperacionesPendientesNav = 0;
+if ($rolNav === 'ADMINISTRADOR') {
+    try {
+        require_once __DIR__ . '/../../models/SolicitudReimpresion.php';
+        require_once __DIR__ . '/../../models/SolicitudRecuperacionPassword.php';
+        $reimpresionesPendientesNav = (new SolicitudReimpresion())->conteoPorEstado()['PENDIENTE'] ?? 0;
+        $recuperacionesPendientesNav = (new SolicitudRecuperacionPassword())->pendientes();
+    } catch (Throwable $e) {
+        $reimpresionesPendientesNav = 0;
+        $recuperacionesPendientesNav = 0;
+    }
+}
 $inicialNav = $usuarioNav
     ? mb_strtoupper(mb_substr(trim($usuarioNav['nombres'] ?? 'U'), 0, 1))
     : '';
@@ -12,11 +25,14 @@ $inicialNav = $usuarioNav
 <nav class="navbar navbar-expand-lg navbar-dark app-navbar shadow-sm sticky-top" style="background-color: #1a428a !important;">
   <div class="container-xl">
     <!-- Logotipo institucional -->
-    <a class="navbar-brand app-navbar-brand d-flex align-items-center gap-3 m-0 text-white" href="index.php?action=<?= htmlspecialchars($inicioNav) ?>" aria-label="Ir al inicio">
-      <img src="assets/img/logo.png" class="app-brand-logo" alt="UAB DIE">
-      <div class="lh-sm">
-        <span class="app-navbar-title d-block">UAB DIE</span>
-        <small class="app-navbar-subtitle d-block">Universidad Autónoma del Beni</small>
+    <a class="navbar-brand app-navbar-brand app-brand-switcher d-flex align-items-center gap-3 m-0 text-white" href="index.php?action=<?= htmlspecialchars($inicioNav) ?>" aria-label="Ir al inicio">
+      <span class="app-brand-identity" aria-hidden="true">
+        <img src="assets/img/logo.png" class="app-brand-logo app-brand-logo-uab" alt="">
+        <img src="assets/img/logo_DIE.png" class="app-brand-logo app-brand-logo-die" alt="">
+      </span>
+      <div class="lh-sm app-brand-copy">
+        <span class="app-navbar-title d-block" data-brand-title>UABJB</span>
+        <small class="app-navbar-subtitle d-block" data-brand-subtitle>Universidad Autonoma del Beni &quot;Jose Ballivian&quot;</small>
       </div>
     </a>
 
@@ -32,7 +48,7 @@ $inicialNav = $usuarioNav
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#navbarMain" aria-label="Cerrar menú"></button>
       </div>
       <div class="offcanvas-body d-lg-flex align-items-lg-center p-0">
-      <ul class="navbar-nav ms-auto align-items-stretch align-items-lg-center gap-1 gap-lg-2 mt-0">
+      <ul class="navbar-nav ms-auto align-items-stretch align-items-lg-center gap-1 gap-lg-1 mt-0">
         <?php if ($usuarioNav): ?>
         <?php if ($rolNav === 'ADMINISTRADOR'): ?>
         <li class="nav-item">
@@ -53,6 +69,24 @@ $inicialNav = $usuarioNav
         <li class="nav-item">
           <a class="nav-link text-white fw-semibold px-2 py-1 rounded" href="index.php?action=admin_reportes">
             <i class="bi bi-bar-chart me-1 text-info"></i> Reportes
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link app-navbar-notification text-white fw-semibold px-2 py-1 rounded position-relative" href="index.php?action=admin_reimpresiones" aria-label="Reimpresiones<?= $reimpresionesPendientesNav ? ': ' . (int)$reimpresionesPendientesNav . ' pendiente(s)' : '' ?>">
+            <i class="bi bi-inbox-fill me-1 text-info"></i> Reimpresiones
+            <?php if ($reimpresionesPendientesNav > 0): ?>
+              <span class="app-notification-badge" aria-hidden="true"><?= $reimpresionesPendientesNav > 99 ? '99+' : (int)$reimpresionesPendientesNav ?></span>
+              <span class="visually-hidden"><?= (int)$reimpresionesPendientesNav ?> solicitud(es) pendiente(s)</span>
+            <?php endif; ?>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link app-navbar-notification text-white fw-semibold px-2 py-1 rounded position-relative" href="index.php?action=admin_solicitudes_recuperacion" aria-label="Solicitudes de recuperación<?= $recuperacionesPendientesNav ? ': ' . (int)$recuperacionesPendientesNav . ' pendiente(s)' : '' ?>">
+            <i class="bi bi-key-fill me-1 text-info"></i> Accesos
+            <?php if ($recuperacionesPendientesNav > 0): ?>
+              <span class="app-notification-badge" aria-hidden="true"><?= $recuperacionesPendientesNav > 99 ? '99+' : (int)$recuperacionesPendientesNav ?></span>
+              <span class="visually-hidden"><?= (int)$recuperacionesPendientesNav ?> solicitud(es) pendiente(s)</span>
+            <?php endif; ?>
           </a>
         </li>
         <li class="nav-item">
@@ -77,6 +111,11 @@ $inicialNav = $usuarioNav
           <li class="nav-item">
             <a class="nav-link text-white fw-semibold px-2 py-1 rounded" href="index.php?action=expositor_asistencia">
               <i class="bi bi-clipboard-check me-1 text-info"></i> Asistencia
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-white fw-semibold px-2 py-1 rounded" href="index.php?action=mis_certificados">
+              <i class="bi bi-award me-1 text-info"></i> Certificados
             </a>
           </li>
         <?php elseif ($rolNav === 'PARTICIPANTE'): ?>
@@ -144,3 +183,27 @@ $inicialNav = $usuarioNav
     </div>
   </div>
 </nav>
+<script>
+(() => {
+  const marcas = document.querySelectorAll('.app-brand-switcher');
+  const datos = {
+    uab: { titulo: 'UABJB', subtitulo: 'Universidad Autonoma del Beni "Jose Ballivian"' },
+    die: { titulo: 'DIE-CERT', subtitulo: 'Direccion de Investigación y Extensión de Pregrado' }
+  };
+  marcas.forEach((marca) => {
+    let esDie = false;
+    window.setInterval(() => {
+      esDie = !esDie;
+      const siguiente = esDie ? datos.die : datos.uab;
+      const copia = marca.querySelector('.app-brand-copy');
+      copia.classList.add('app-brand-copy-changing');
+      window.setTimeout(() => {
+        marca.classList.toggle('app-brand-die-activo', esDie);
+        marca.querySelector('[data-brand-title]').textContent = siguiente.titulo;
+        marca.querySelector('[data-brand-subtitle]').textContent = siguiente.subtitulo;
+        copia.classList.remove('app-brand-copy-changing');
+      }, 180);
+    }, 6000);
+  });
+})();
+</script>

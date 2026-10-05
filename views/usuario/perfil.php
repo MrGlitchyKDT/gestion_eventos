@@ -1,5 +1,5 @@
 <?php 
-$titulo_pagina = "Mi Perfil — UAB DIE";
+$titulo_pagina = "Mi Perfil — CERT-DIE";
 $seccion_activa = "perfil";
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/navbar.php'; 

@@ -1,4 +1,7 @@
-<?php 
+<?php
+require __DIR__ . '/panel.php';
+return;
+
 $titulo_pagina = "Reportes y Estadísticas — Admin UAB";
 $seccion_activa = "reportes";
 require_once __DIR__ . '/../../layouts/header.php';

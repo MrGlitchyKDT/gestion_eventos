@@ -17,6 +17,15 @@ class QrHelper {
         return "{$protocolo}://{$host}{$baseDir}/index.php?action=verificar_certificado&codigo=" . urlencode($codigoUnico);
     }
 
+    /** URL pública de la ficha desde la cual una persona puede inscribirse al evento. */
+    public static function generarUrlInscripcionEvento(int $idEvento): string {
+        $protocolo = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = preg_replace('/[^a-zA-Z0-9.:-]/', '', $_SERVER['HTTP_HOST'] ?? 'localhost');
+        $script = $_SERVER['SCRIPT_NAME'] ?? '';
+        $baseDir = rtrim(str_replace('\\', '/', dirname($script)), '/');
+        return "{$protocolo}://{$host}{$baseDir}/index.php?action=detalle_evento&id=" . $idEvento;
+    }
+
     /**
      * Retorna la URL de renderizado dinámico del código QR (utilizable directamente en <img>)
      */

@@ -22,8 +22,9 @@ $rutas_publicas = [
     'do_registro',
     'recuperar',
     'do_recuperar',
-    'verificar_certificado',
-    'imprimir_certificado'
+    'reestablecer',
+    'do_reestablecer',
+    'verificar_certificado'
 ];
 
 // 2. Control de acceso perimetral
@@ -86,6 +87,16 @@ switch ($action) {
     case 'do_recuperar':
         require_once __DIR__ . '/../controllers/AuthController.php';
         (new AuthController())->doRecuperar();
+        break;
+
+    case 'reestablecer':
+        require_once __DIR__ . '/../controllers/AuthController.php';
+        (new AuthController())->reestablecer();
+        break;
+
+    case 'do_reestablecer':
+        require_once __DIR__ . '/../controllers/AuthController.php';
+        (new AuthController())->doReestablecer();
         break;
 
     case 'logout':
@@ -178,6 +189,11 @@ switch ($action) {
         (new ExpositorController())->misEventos();
         break;
 
+    case 'expositor_subir_material':
+        require_once __DIR__ . '/../controllers/ExpositorController.php';
+        (new ExpositorController())->subirMateriales();
+        break;
+
     case 'expositor_sesiones':
         require_once __DIR__ . '/../controllers/ExpositorController.php';
         (new ExpositorController())->sesiones();
@@ -220,7 +236,14 @@ switch ($action) {
         AuthHelper::requerirRol(['ADMINISTRADOR']);
         require_once __DIR__ . '/../models/Evento.php';
         $eventoModel = new Evento();
-        $eventos = $eventoModel->listarParaAdministracion();
+        $filtrosEventos = [
+            'id_tipo_evento' => filter_input(INPUT_GET, 'id_tipo_evento', FILTER_VALIDATE_INT) ?: null,
+            'id_categoria' => filter_input(INPUT_GET, 'id_categoria', FILTER_VALIDATE_INT) ?: null,
+            'habilitado' => in_array(strtoupper((string)($_GET['habilitado'] ?? '')), ['SI', 'NO'], true)
+                ? strtoupper((string)$_GET['habilitado']) : '',
+            'buscar' => mb_substr(trim((string)($_GET['buscar'] ?? '')), 0, 150),
+        ];
+        $eventos = $eventoModel->listarParaAdministracion($filtrosEventos);
         $expositoresPorEvento = $eventoModel->listarExpositoresAgrupadosPorEventos(array_column($eventos, 'id_evento'));
         require_once __DIR__ . '/../models/SesionEvento.php';
         $sesionesPorEvento = (new SesionEvento())->listarAgrupadasPorEventos(array_column($eventos, 'id_evento'));
@@ -246,6 +269,11 @@ switch ($action) {
         (new CertificadoController())->adminSubirPlantilla();
         break;
 
+    case 'admin_plantilla_certificado_archivar':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminArchivarPlantilla();
+        break;
+
     case 'admin_plantilla_certificado_diseno':
         require_once __DIR__ . '/../controllers/CertificadoController.php';
         (new CertificadoController())->adminGuardarDiseno();
@@ -256,14 +284,49 @@ switch ($action) {
         (new CertificadoController())->verPlantilla();
         break;
 
+    case 'admin_plantilla_certificado_previsualizar':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminPrevisualizar();
+        break;
+
     case 'admin_certificado_emitir_pdf':
         require_once __DIR__ . '/../controllers/CertificadoController.php';
         (new CertificadoController())->adminEmitirPdf();
         break;
 
+    case 'admin_certificado_emitir_expositor_pdf':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminEmitirExpositorPdf();
+        break;
+
     case 'admin_certificado_regenerar_pdf':
         require_once __DIR__ . '/../controllers/CertificadoController.php';
         (new CertificadoController())->adminRegenerarPdf();
+        break;
+
+    case 'admin_certificado_anular':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminAnular();
+        break;
+
+    case 'admin_reimpresiones':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminReimpresiones();
+        break;
+
+    case 'admin_reimpresion_comprobante':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminVerComprobanteReimpresion();
+        break;
+
+    case 'admin_reimpresion_resolver':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminResolverReimpresion();
+        break;
+
+    case 'admin_reimpresion_entregar':
+        require_once __DIR__ . '/../controllers/CertificadoController.php';
+        (new CertificadoController())->adminEntregarReimpresion();
         break;
 
     case 'admin_eventos_guardar':
@@ -340,6 +403,21 @@ switch ($action) {
         (new AdminController())->toggleEstadoUsuario();
         break;
 
+    case 'admin_usuario_generar_recuperacion':
+        require_once __DIR__ . '/../controllers/AdminController.php';
+        (new AdminController())->generarEnlaceRecuperacion();
+        break;
+
+    case 'admin_solicitudes_recuperacion':
+        require_once __DIR__ . '/../controllers/AdminController.php';
+        (new AdminController())->solicitudesRecuperacion();
+        break;
+
+    case 'admin_solicitud_recuperacion_resolver':
+        require_once __DIR__ . '/../controllers/AdminController.php';
+        (new AdminController())->resolverSolicitudRecuperacion();
+        break;
+
     case 'admin_tipos_eventos':
         require_once __DIR__ . '/../controllers/AdminController.php';
         (new AdminController())->tiposEventos();
@@ -370,6 +448,26 @@ switch ($action) {
     case 'admin_reportes':
         require_once __DIR__ . '/../controllers/AdminController.php';
         (new AdminController())->reportes();
+        break;
+
+    case 'admin_reporte_evento':
+        require_once __DIR__ . '/../controllers/ReporteController.php';
+        (new ReporteController())->detalleEvento();
+        break;
+
+    case 'admin_reporte_asistencia_sesion':
+        require_once __DIR__ . '/../controllers/ReporteController.php';
+        (new ReporteController())->detalleAsistenciaSesion();
+        break;
+
+    case 'admin_reporte_asistencia_pdf':
+        require_once __DIR__ . '/../controllers/ReporteController.php';
+        (new ReporteController())->descargarAsistenciaPdf();
+        break;
+
+    case 'admin_reporte_certificados_pdf':
+        require_once __DIR__ . '/../controllers/ReporteController.php';
+        (new ReporteController())->descargarCertificadosPdf();
         break;
 
     case 'admin_auditoria':

@@ -94,6 +94,54 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
   flex: 0 0 auto;
 }
 
+/* Alterna con fundido la identidad UABJB y DIE-CERT cada seis segundos. */
+.app-brand-identity {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+}
+
+.app-brand-identity .app-brand-logo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 420ms ease, transform 420ms ease;
+}
+
+.app-brand-logo-die {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.app-brand-die-activo .app-brand-logo-uab {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.app-brand-die-activo .app-brand-logo-die {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.app-brand-copy {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.app-brand-copy-changing {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-brand-identity .app-brand-logo,
+  .app-brand-copy {
+    transition: none;
+  }
+}
+
 /* ==========================================================================
    3. BARRA DE NAVEGACIÓN (NAVBAR)
    ========================================================================== */
@@ -118,6 +166,9 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
 
 .app-navbar .container-xl {
   width: 100%;
+  max-width: none;
+  padding-left: clamp(1rem, 2vw, 2rem);
+  padding-right: clamp(1rem, 2vw, 2rem);
 }
 
 .app-navbar-brand {
@@ -144,6 +195,42 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
 
 .app-navbar-menu {
   flex-grow: 1;
+}
+
+/* La navegación administrativa concentra más módulos: evita que sus etiquetas se partan. */
+@media (min-width: 992px) {
+  .app-navbar .navbar-nav {
+    column-gap: 0.2rem !important;
+  }
+
+  .app-navbar .navbar-nav > .nav-item > .nav-link {
+    white-space: nowrap;
+    padding-left: 0.4rem !important;
+    padding-right: 0.4rem !important;
+  }
+}
+
+.app-navbar-notification {
+  padding-right: 0.8rem !important;
+}
+
+.app-notification-badge {
+  position: absolute;
+  top: -0.2rem;
+  right: -0.1rem;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--uab-azul);
+  border-radius: 999px;
+  background: #dc3545;
+  color: #fff;
+  font-size: 0.63rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .app-profile-toggle {
@@ -206,6 +293,28 @@ h1, h2, h3, h4, h5, h6, .fw-bold {
 .cert-editor-pdf { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; background: #fff; }
 .cert-editor-field { position: absolute; z-index: 2; transform: translate(-50%, -50%); cursor: grab; touch-action: none; border: 1px dashed #0d6efd; border-radius: 4px; background: rgba(255,255,255,.88); color: #0b3d7a; font-size: .72rem; font-weight: 700; padding: .18rem .35rem; }
 .cert-editor-field:active { cursor: grabbing; background: #dbeafe; }
+
+/* El formulario del editor envuelve cabecera, cuerpo y pie del modal. */
+#modalEditorCertificado .modal-content > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+#modalEditorCertificado .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+#modalEditorCertificado .modal-footer { flex: 0 0 auto; }
+/* La vista previa solo es de consulta: el desplazamiento sigue perteneciendo al editor. */
+.cert-preview-frame {
+  height: min(720px, 72vh);
+  pointer-events: none;
+}
 
 /* Lista administrativa de eventos: lectura y acciones más cómodas. */
 .tabla-eventos-admin thead th {
@@ -1205,7 +1314,8 @@ body:not(.auth-body) main.container-fluid {
 
 /* El formulario es el hijo directo del modal y debe participar en su altura desplazable. */
 #modalNuevoEvento .modal-content > form,
-#modalEditarEvento .modal-content > form {
+#modalEditarEvento .modal-content > form,
+#modalSesiones .modal-content > form {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1213,10 +1323,24 @@ body:not(.auth-body) main.container-fluid {
 }
 
 #modalNuevoEvento .modal-body,
-#modalEditarEvento .modal-body {
+#modalEditarEvento .modal-body,
+#modalSesiones .modal-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* El cronograma puede contener decenas de sesiones; el cuerpo conserva
+   cabecera y acciones finales mientras su lista se desplaza. */
+#modalSesiones .modal-content {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+#modalSesiones .modal-header,
+#modalSesiones .modal-footer {
+  flex: 0 0 auto;
 }
 
 #modalNuevoEvento .modal-footer,
@@ -1226,32 +1350,51 @@ body:not(.auth-body) main.container-fluid {
 
 /* Formularios de eventos: el contenido del modal debe desplazarse en móvil. */
 @media (max-width: 767.98px) {
-  #modalNuevoEvento .modal-dialog,
-  #modalEditarEvento .modal-dialog {
+  #modalEditorCertificado .modal-dialog {
     width: calc(100% - 1rem);
     max-width: none;
     height: calc(100dvh - 1rem);
     margin: 0.5rem auto;
   }
 
-  #modalNuevoEvento .modal-content,
-  #modalEditarEvento .modal-content {
+  #modalEditorCertificado .modal-content {
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+
+  .cert-preview-frame { height: min(560px, 62dvh); }
+
+  #modalNuevoEvento .modal-dialog,
+  #modalEditarEvento .modal-dialog,
+  #modalSesiones .modal-dialog {
+    width: calc(100% - 1rem);
+    max-width: none;
+    height: calc(100dvh - 1rem);
+    margin: 0.5rem auto;
+  }
+
+#modalNuevoEvento .modal-content,
+#modalEditarEvento .modal-content,
+#modalSesiones .modal-content {
     height: 100%;
     max-height: 100%;
     overflow: hidden;
   }
 
   /* El formulario envuelve header, body y footer; por eso también requiere flex. */
-  #modalNuevoEvento .modal-content > form,
-  #modalEditarEvento .modal-content > form {
+#modalNuevoEvento .modal-content > form,
+#modalEditarEvento .modal-content > form,
+#modalSesiones .modal-content > form {
     display: flex;
     flex-direction: column;
     min-height: 0;
     height: 100%;
   }
 
-  #modalNuevoEvento .modal-body,
-  #modalEditarEvento .modal-body {
+#modalNuevoEvento .modal-body,
+#modalEditarEvento .modal-body,
+#modalSesiones .modal-body {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto !important;

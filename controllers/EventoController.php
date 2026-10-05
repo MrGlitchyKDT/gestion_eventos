@@ -86,7 +86,8 @@ class EventoController {
         if (AuthHelper::estaAutenticado()) {
             $usuario = AuthHelper::obtenerUsuario();
             $puedeDescargarMateriales = strtoupper((string)$usuario['rol_nombre']) === 'ADMINISTRADOR'
-                || $this->materialModel->usuarioPuedeDescargar($id_evento, (int)$usuario['id_usuario']);
+                || $this->materialModel->usuarioPuedeDescargar($id_evento, (int)$usuario['id_usuario'])
+                || $this->materialModel->usuarioEsExpositorAsignado($id_evento, (int)$usuario['id_usuario']);
         }
 
         require_once __DIR__ . '/../views/publico/detalle_evento.php';
@@ -555,15 +556,19 @@ class EventoController {
         ];
     }
 
-    /** Descarga protegida para administración y participantes inscritos al evento. */
+    /** Descarga protegida para administración, participantes inscritos y expositores asignados. */
     public function descargarMaterial(): void {
-        AuthHelper::requerirRol(['ADMINISTRADOR', 'PARTICIPANTE']);
+        AuthHelper::requerirRol(['ADMINISTRADOR', 'PARTICIPANTE', 'EXPOSITOR']);
         $idMaterial = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
         $material = $idMaterial ? $this->materialModel->obtenerPorId($idMaterial) : null;
         $usuario = AuthHelper::obtenerUsuario();
         $esAdmin = strtoupper((string)($usuario['rol_nombre'] ?? '')) === 'ADMINISTRADOR';
 
-        if (!$material || (!$esAdmin && !$this->materialModel->usuarioPuedeDescargar((int)$material['id_evento'], (int)$usuario['id_usuario']))) {
+        $puedeDescargar = $material && ($esAdmin
+            || $this->materialModel->usuarioPuedeDescargar((int)$material['id_evento'], (int)$usuario['id_usuario'])
+            || $this->materialModel->usuarioEsExpositorAsignado((int)$material['id_evento'], (int)$usuario['id_usuario']));
+
+        if (!$puedeDescargar) {
             http_response_code(403);
             exit('No tiene acceso a este material.');
         }

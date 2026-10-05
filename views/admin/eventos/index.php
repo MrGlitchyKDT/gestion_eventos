@@ -1,4 +1,6 @@
-<?php 
+<?php
+$__qrHelper = __DIR__ . '/../../../helpers/QrHelper.php';
+require_once $__qrHelper;
 $titulo_pagina = "Gestión de Eventos — Admin UAB";
 $seccion_activa = "eventos";
 require_once __DIR__ . '/../../layouts/header.php';
@@ -28,6 +30,17 @@ require_once __DIR__ . '/../../layouts/navbar.php';
         <?php unset($_SESSION['error']); ?>
       <?php endif; ?>
 
+      <form method="get" class="card border-0 shadow-sm mb-3">
+        <input type="hidden" name="action" value="admin_eventos">
+        <div class="card-body row g-3 align-items-end">
+          <div class="col-12 col-md-6 col-xl-3"><label class="form-label fw-semibold" for="buscar-evento">Buscar por nombre</label><input class="form-control" id="buscar-evento" type="search" name="buscar" value="<?= htmlspecialchars($filtrosEventos['buscar']) ?>" placeholder="Nombre del evento"></div>
+          <div class="col-12 col-md-6 col-xl-2"><label class="form-label fw-semibold" for="tipo-evento-filtro">Tipo de evento</label><select class="form-select" id="tipo-evento-filtro" name="id_tipo_evento"><option value="">Todos los tipos</option><?php foreach ($tipos as $tipo): ?><option value="<?= (int)$tipo['id_tipo_evento'] ?>" <?= $filtrosEventos['id_tipo_evento'] === (int)$tipo['id_tipo_evento'] ? 'selected' : '' ?>><?= htmlspecialchars($tipo['nombre']) ?></option><?php endforeach; ?></select></div>
+          <div class="col-12 col-md-6 col-xl-3"><label class="form-label fw-semibold" for="area-evento-filtro">Área</label><select class="form-select" id="area-evento-filtro" name="id_categoria"><option value="">Todas las áreas</option><?php foreach ($categorias as $categoria): ?><option value="<?= (int)$categoria['id_categoria'] ?>" <?= $filtrosEventos['id_categoria'] === (int)$categoria['id_categoria'] ? 'selected' : '' ?>><?= htmlspecialchars($categoria['nombre']) ?></option><?php endforeach; ?></select></div>
+          <div class="col-12 col-md-6 col-xl-2"><label class="form-label fw-semibold" for="habilitado-evento-filtro">Habilitado</label><select class="form-select" id="habilitado-evento-filtro" name="habilitado"><option value="">Todos</option><option value="SI" <?= $filtrosEventos['habilitado'] === 'SI' ? 'selected' : '' ?>>Habilitado</option><option value="NO" <?= $filtrosEventos['habilitado'] === 'NO' ? 'selected' : '' ?>>No habilitado</option></select></div>
+          <div class="col-12 col-xl-2 d-flex gap-2"><button class="btn btn-uab-azul flex-grow-1"><i class="bi bi-funnel me-1"></i>Filtrar</button><a class="btn btn-outline-secondary" href="index.php?action=admin_eventos" title="Limpiar filtros"><i class="bi bi-x-lg"></i></a></div>
+        </div>
+      </form>
+
       <div class="table-responsive card border-0 shadow-sm">
         <table class="table table-uab tabla-eventos-admin table-hover align-middle mb-0">
           <thead>
@@ -41,7 +54,7 @@ require_once __DIR__ . '/../../layouts/navbar.php';
           </thead>
           <tbody>
             <?php if (empty($eventos)): ?>
-              <tr><td colspan="5" class="text-center py-4 text-muted">No existen eventos registrados en el sistema.</td></tr>
+              <tr><td colspan="5" class="text-center py-4 text-muted">No se encontraron eventos con los filtros seleccionados.</td></tr>
             <?php else: ?>
               <?php foreach ($eventos as $ev): ?>
                 <tr>
@@ -75,6 +88,10 @@ require_once __DIR__ . '/../../layouts/navbar.php';
                     <a class="btn btn-sm btn-outline-secondary" href="index.php?action=detalle_evento&id=<?= $ev['id_evento'] ?>" title="Ver público" target="_blank">
                       <i class="bi bi-eye"></i>
                     </a>
+                    <?php $urlInscripcionQr = QrHelper::generarUrlInscripcionEvento((int)$ev['id_evento']); ?>
+                    <button type="button" class="btn btn-sm btn-outline-dark" data-bs-toggle="modal" data-bs-target="#modalQrInscripcion" data-evento-titulo="<?= htmlspecialchars($ev['titulo'], ENT_QUOTES, 'UTF-8') ?>" data-url-inscripcion="<?= htmlspecialchars($urlInscripcionQr, ENT_QUOTES, 'UTF-8') ?>" onclick="prepararQrInscripcion(this)" title="Código QR de inscripción">
+                      <i class="bi bi-qr-code"></i>
+                    </button>
                     <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalInscripcionManual" onclick="prepararInscripcionManual(<?= $ev['id_evento'] ?>, '<?= htmlspecialchars(addslashes($ev['titulo'])) ?>')">
                       <i class="bi bi-person-plus"></i>
                     </button>
@@ -125,6 +142,14 @@ require_once __DIR__ . '/../../layouts/navbar.php';
     </section>
   </div>
 </main>
+
+<div class="modal fade" id="modalQrInscripcion" tabindex="-1" aria-labelledby="modalQrInscripcionTitulo" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header bg-uab-azul text-white"><h2 class="modal-title h5" id="modalQrInscripcionTitulo"><i class="bi bi-qr-code me-2"></i>QR de inscripción</h2><button class="btn-close btn-close-white" type="button" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+    <div class="modal-body text-center"><p class="mb-3">Escanee este código para abrir la ficha de <strong id="qr-inscripcion-evento"></strong>.</p><img id="qr-inscripcion-imagen" class="img-fluid border rounded p-2 bg-white" width="260" height="260" alt="Código QR de inscripción"><label class="form-label visually-hidden" for="qr-inscripcion-url">Enlace de inscripción</label><div class="input-group mt-3"><input id="qr-inscripcion-url" class="form-control" readonly><button type="button" class="btn btn-outline-secondary" onclick="copiarUrlInscripcionQr()" title="Copiar enlace"><i class="bi bi-copy"></i></button></div><p class="form-text text-start mb-0">El enlace abre la ficha pública, donde la persona podrá iniciar sesión y confirmar su inscripción.</p></div>
+    <div class="modal-footer"><a id="qr-inscripcion-abrir" class="btn btn-outline-primary" target="_blank"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir enlace</a><a id="qr-inscripcion-descargar" class="btn btn-uab-azul" target="_blank"><i class="bi bi-download me-1"></i>Abrir QR</a></div>
+  </div></div>
+</div>
 
 <!-- Modal: Nuevo Evento -->
 <div class="modal fade" id="modalNuevoEvento" tabindex="-1" aria-hidden="true">
@@ -809,6 +834,27 @@ function prepararEdicionEvento(boton) {
       }
     });
   });
+}
+
+function prepararQrInscripcion(boton) {
+  const url = boton.dataset.urlInscripcion;
+  const titulo = boton.dataset.eventoTitulo;
+  const urlQr = 'https://api.qrserver.com/v1/create-qr-code/?size=600x600&format=png&data=' + encodeURIComponent(url);
+  document.getElementById('qr-inscripcion-evento').textContent = titulo;
+  document.getElementById('qr-inscripcion-url').value = url;
+  document.getElementById('qr-inscripcion-imagen').src = urlQr;
+  document.getElementById('qr-inscripcion-abrir').href = url;
+  document.getElementById('qr-inscripcion-descargar').href = urlQr;
+}
+
+function copiarUrlInscripcionQr() {
+  const campo = document.getElementById('qr-inscripcion-url');
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(campo.value);
+  } else {
+    campo.select();
+    document.execCommand('copy');
+  }
 }
 </script>
 

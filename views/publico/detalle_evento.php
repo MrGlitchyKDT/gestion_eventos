@@ -1,5 +1,5 @@
 <?php 
-$titulo_pagina = htmlspecialchars($evento['titulo']) . " — UAB DIE";
+$titulo_pagina = htmlspecialchars($evento['titulo']) . " — CERT-DIE";
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/navbar.php'; 
 
