@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/QrHelper.php';
 
 class CertificadoPdfService {
     public function generar(array $plantilla, array $certificado): string {
@@ -67,16 +68,9 @@ class CertificadoPdfService {
     private function texto(string $texto): string { return iconv('UTF-8', 'windows-1252//TRANSLIT', $texto) ?: $texto; }
 
     private function insertarQr(\FPDF $pdf, string $contenido, array $campo, float $escalaX, float $escalaY): void {
-        $url = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&format=png&data=' . urlencode($contenido);
-        $imagen = @file_get_contents($url);
-        if ($imagen === false) return; // El folio y la URL de validación permanecen impresos como respaldo.
-        $temporal = tempnam(sys_get_temp_dir(), 'uab-qr-') . '.png';
-        try {
-            file_put_contents($temporal, $imagen);
-            $lado = (float)($campo['tamano'] ?? 28) * min($escalaX, $escalaY);
-            $x = ((float)($campo['x'] ?? 240) * $escalaX) - ($lado / 2);
-            $y = ((float)($campo['y'] ?? 165) * $escalaY) - ($lado / 2);
-            $pdf->Image($temporal, max(0, $x), max(0, $y), $lado, $lado, 'PNG');
-        } finally { if (is_file($temporal)) @unlink($temporal); }
+        $lado = (float)($campo['tamano'] ?? 28) * min($escalaX, $escalaY);
+        $x = ((float)($campo['x'] ?? 240) * $escalaX) - ($lado / 2);
+        $y = ((float)($campo['y'] ?? 165) * $escalaY) - ($lado / 2);
+        QrHelper::dibujarEnPdf($pdf, $contenido, max(0, $x), max(0, $y), $lado);
     }
 }

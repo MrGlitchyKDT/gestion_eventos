@@ -74,12 +74,15 @@ class EventoController {
 
         // Verificar si el usuario en sesión ya se encuentra inscrito
         $estaInscrito = false;
+        $esExpositorAsignado = false;
         if (AuthHelper::estaAutenticado()) {
             $usuario = AuthHelper::obtenerUsuario();
             $db = Database::getConnection();
             $stmt = $db->prepare("SELECT id_inscripcion FROM inscripciones WHERE id_evento = ? AND id_usuario = ? AND estado = 'INSCRITO'");
             $stmt->execute([$id_evento, $usuario['id_usuario']]);
             $estaInscrito = (bool)$stmt->fetch();
+            $esExpositorAsignado = strtoupper((string)($usuario['rol_nombre'] ?? '')) === 'EXPOSITOR'
+                && $this->eventoModel->usuarioEsExpositorAsignado($id_evento, (int)$usuario['id_usuario']);
         }
 
         $puedeDescargarMateriales = false;
@@ -97,7 +100,7 @@ class EventoController {
      * RF-10 y RF-11: Procesa la inscripción del participante
      */
     public function inscribirse(): void {
-        AuthHelper::requerirRol(['PARTICIPANTE', 'ADMINISTRADOR']);
+        AuthHelper::requerirRol(['PARTICIPANTE', 'EXPOSITOR', 'ADMINISTRADOR']);
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             header('Location: index.php?action=catalogo');
@@ -113,7 +116,17 @@ class EventoController {
             exit();
         }
 
+        if (!AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar la inscripción. Intente nuevamente.';
+            header("Location: index.php?action=detalle_evento&id={$id_evento}");
+            exit();
+        }
+
         try {
+            if (strtoupper((string)($usuario['rol_nombre'] ?? '')) === 'EXPOSITOR'
+                && $this->eventoModel->usuarioEsExpositorAsignado($id_evento, (int)$usuario['id_usuario'])) {
+                throw new InvalidArgumentException('Ya está asignado como expositor en este evento y no puede inscribirse también como participante.');
+            }
             $idInscripcion = $this->inscripcionModel->registrar($id_evento, (int)$usuario['id_usuario'], 'WEB_PARTICIPANTE');
             $_SESSION['success'] = "¡Inscripción confirmada exitosamente!";
             header("Location: index.php?action=mis_inscripciones");
@@ -129,9 +142,15 @@ class EventoController {
      * RF-12: Procesa la cancelación voluntaria
      */
     public function cancelarInscripcion(): void {
-        AuthHelper::requerirRol(['PARTICIPANTE', 'ADMINISTRADOR']);
+        AuthHelper::requerirRol(['PARTICIPANTE', 'EXPOSITOR', 'ADMINISTRADOR']);
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: index.php?action=mis_inscripciones');
+            exit();
+        }
+
+        if (!AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar la cancelación. Intente nuevamente.';
             header('Location: index.php?action=mis_inscripciones');
             exit();
         }
@@ -172,7 +191,6 @@ class EventoController {
 
         try {
             $datos = [
-                'codigo'                        => trim($_POST['codigo']),
                 'titulo'                        => trim($_POST['titulo']),
                 'descripcion'                  => trim($_POST['descripcion']),
                 'id_tipo_evento'                => (int)$_POST['id_tipo_evento'],
@@ -193,6 +211,8 @@ class EventoController {
             ];
 
             $idEvento = $this->eventoModel->crear($datos);
+            $eventoCreado = $this->eventoModel->obtenerDetalle($idEvento);
+            $codigoEvento = (string)($eventoCreado['codigo'] ?? 'EVT-' . $idEvento);
             $cantidadMateriales = $this->materialModel->subirMultiples(
                 $idEvento,
                 (int)$admin['id_usuario'],
@@ -204,10 +224,10 @@ class EventoController {
                 (int)$admin['id_usuario'],
                 'CREAR_EVENTO',
                 'EVENTOS',
-                "Se creó el evento ID #{$idEvento} con código {$datos['codigo']}"
+                "Se creó el evento ID #{$idEvento} con código {$codigoEvento}"
             );
 
-            $_SESSION['success'] = "Evento registrado exitosamente en estado BORRADOR."
+            $_SESSION['success'] = "Evento {$codigoEvento} registrado exitosamente en estado BORRADOR."
                 . ($cantidadMateriales ? " Se adjuntaron {$cantidadMateriales} archivo(s)." : '');
             header('Location: index.php?action=admin_eventos');
             exit();
@@ -222,7 +242,7 @@ class EventoController {
 
     /** Muestra las sesiones cuya autoasistencia está abierta para el participante. */
     public function miAsistencia(): void {
-        AuthHelper::requerirRol(['PARTICIPANTE', 'ADMINISTRADOR']);
+        AuthHelper::requerirRol(['PARTICIPANTE', 'EXPOSITOR', 'ADMINISTRADOR']);
         $usuario = AuthHelper::obtenerUsuario();
         $idEvento = filter_input(INPUT_GET, 'id_evento', FILTER_VALIDATE_INT) ?: null;
         $sesionesAbiertas = $this->asistenciaModel->sesionesAbiertasPorUsuario((int)$usuario['id_usuario'], $idEvento);
@@ -231,7 +251,7 @@ class EventoController {
 
     /** Registra la presencia que el propio participante confirma durante la ventana autorizada. */
     public function confirmarAsistencia(): void {
-        AuthHelper::requerirRol(['PARTICIPANTE', 'ADMINISTRADOR']);
+        AuthHelper::requerirRol(['PARTICIPANTE', 'EXPOSITOR', 'ADMINISTRADOR']);
         $idEvento = filter_input(INPUT_POST, 'id_evento', FILTER_VALIDATE_INT);
         $idSesion = filter_input(INPUT_POST, 'id_sesion', FILTER_VALIDATE_INT);
         try {
@@ -650,7 +670,7 @@ class EventoController {
      * RF-07, RF-08, RF-10: Dashboard principal del participante con eventos abiertos
      */
     public function participanteDashboard(): void {
-        AuthHelper::requerirRol(['PARTICIPANTE', 'ADMINISTRADOR']);
+        AuthHelper::requerirRol(['PARTICIPANTE', 'EXPOSITOR', 'ADMINISTRADOR']);
         $usuario = AuthHelper::obtenerUsuario();
         $db = Database::getConnection();
 
@@ -672,7 +692,15 @@ class EventoController {
         // 2. Obtener IDs de eventos en los que el usuario ya está registrado
         $stmtMisEvt = $db->prepare("SELECT id_evento FROM inscripciones WHERE id_usuario = :id AND estado != 'CANCELADO'");
         $stmtMisEvt->execute([':id' => $usuario['id_usuario']]);
-        $misEventosIds = $stmtMisEvt->fetchAll(PDO::FETCH_COLUMN);
+        $misEventosIds = array_map('intval', $stmtMisEvt->fetchAll(PDO::FETCH_COLUMN));
+
+        // Un expositor puede participar en otros eventos, pero no debe duplicar
+        // su rol en aquellos donde ya fue asignado como docente/expositor.
+        $stmtMisEventosExpositor = $db->prepare(
+            'SELECT id_evento FROM evento_expositores WHERE id_usuario = :id_usuario'
+        );
+        $stmtMisEventosExpositor->execute([':id_usuario' => $usuario['id_usuario']]);
+        $misEventosComoExpositorIds = array_map('intval', $stmtMisEventosExpositor->fetchAll(PDO::FETCH_COLUMN));
 
         // 3. Métricas rápidas del usuario para el encabezado
         $stmtTotalIns = $db->prepare("SELECT COUNT(*) FROM inscripciones WHERE id_usuario = :id AND estado = 'INSCRITO'");

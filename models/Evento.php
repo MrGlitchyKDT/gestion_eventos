@@ -13,6 +13,17 @@ class Evento {
      * RF-29: Crea un nuevo evento en estado BORRADOR
      */
     public function crear(array $datos): int {
+        $abreviaturas = $this->obtenerAbreviaturasCatalogo(
+            (int)$datos['id_tipo_evento'],
+            (int)$datos['id_categoria']
+        );
+
+        /*
+         * El ID de un evento sólo existe después del INSERT. Se inserta con un
+         * valor temporal único y, dentro de la misma transacción, se sustituye
+         * por el código definitivo EVT-{TIPO}-{ÁREA}-{ID}.
+         */
+        $codigoTemporal = 'TMP-' . strtoupper(bin2hex(random_bytes(8)));
         $sql = "INSERT INTO eventos (
                     codigo, titulo, descripcion, id_tipo_evento, id_categoria, modalidad, 
                     lugar, enlace_virtual, cupo_maximo, fecha_inicio_inscripcion, 
@@ -27,29 +38,75 @@ class Evento {
                     'BORRADOR', :id_usuario_creador
                 )";
 
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            ':codigo'                        => trim($datos['codigo']),
-            ':titulo'                        => trim($datos['titulo']),
-            ':descripcion'                  => trim($datos['descripcion']),
-            ':id_tipo_evento'                => (int)$datos['id_tipo_evento'],
-            ':id_categoria'                  => (int)$datos['id_categoria'],
-            ':modalidad'                     => $datos['modalidad'],
-            ':lugar'                         => !empty($datos['lugar']) ? trim($datos['lugar']) : null,
-            ':enlace_virtual'                => !empty($datos['enlace_virtual']) ? trim($datos['enlace_virtual']) : null,
-            ':cupo_maximo'                   => (int)($datos['cupo_maximo'] ?? 0),
-            ':fecha_inicio_inscripcion'      => $datos['fecha_inicio_inscripcion'],
-            ':fecha_fin_inscripcion'        => $datos['fecha_fin_inscripcion'],
-            ':fecha_inicio'                  => $datos['fecha_inicio'],
-            ':fecha_fin'                     => $datos['fecha_fin'],
-            ':emite_certificado'             => !empty($datos['emite_certificado']) ? 1 : 0,
-            ':horas_academicas'              => (int)($datos['horas_academicas'] ?? 0),
-            ':porcentaje_asistencia_minimo' => (float)($datos['porcentaje_asistencia_minimo'] ?? 80.00),
-            ':nota_minima_aprobacion'        => (float)($datos['nota_minima_aprobacion'] ?? 0.00),
-            ':id_usuario_creador'            => (int)$datos['id_usuario_creador']
-        ]);
+        $this->db->beginTransaction();
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([
+                ':codigo'                        => $codigoTemporal,
+                ':titulo'                        => trim($datos['titulo']),
+                ':descripcion'                   => trim($datos['descripcion']),
+                ':id_tipo_evento'                => (int)$datos['id_tipo_evento'],
+                ':id_categoria'                  => (int)$datos['id_categoria'],
+                ':modalidad'                     => $datos['modalidad'],
+                ':lugar'                         => !empty($datos['lugar']) ? trim($datos['lugar']) : null,
+                ':enlace_virtual'                => !empty($datos['enlace_virtual']) ? trim($datos['enlace_virtual']) : null,
+                ':cupo_maximo'                   => (int)($datos['cupo_maximo'] ?? 0),
+                ':fecha_inicio_inscripcion'      => $datos['fecha_inicio_inscripcion'],
+                ':fecha_fin_inscripcion'         => $datos['fecha_fin_inscripcion'],
+                ':fecha_inicio'                  => $datos['fecha_inicio'],
+                ':fecha_fin'                     => $datos['fecha_fin'],
+                ':emite_certificado'             => !empty($datos['emite_certificado']) ? 1 : 0,
+                ':horas_academicas'              => (int)($datos['horas_academicas'] ?? 0),
+                ':porcentaje_asistencia_minimo'  => (float)($datos['porcentaje_asistencia_minimo'] ?? 80.00),
+                ':nota_minima_aprobacion'        => (float)($datos['nota_minima_aprobacion'] ?? 0.00),
+                ':id_usuario_creador'            => (int)$datos['id_usuario_creador']
+            ]);
 
-        return (int)$this->db->lastInsertId();
+            $idEvento = (int)$this->db->lastInsertId();
+            $codigoFinal = self::generarCodigoAutomatico(
+                $abreviaturas['tipo'],
+                $abreviaturas['area'],
+                $idEvento
+            );
+            $actualizarCodigo = $this->db->prepare('UPDATE eventos SET codigo = :codigo WHERE id_evento = :id');
+            $actualizarCodigo->execute([':codigo' => $codigoFinal, ':id' => $idEvento]);
+            $this->db->commit();
+            return $idEvento;
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    /** Obtiene y valida las abreviaturas activas que forman el código del evento. */
+    private function obtenerAbreviaturasCatalogo(int $idTipo, int $idArea): array {
+        $stmt = $this->db->prepare(
+            "SELECT te.abreviatura AS tipo, c.abreviatura AS area
+             FROM tipos_evento te
+             CROSS JOIN categorias c
+             WHERE te.id_tipo_evento = :tipo AND te.activo = 1
+               AND c.id_categoria = :area AND c.activo = 1
+             LIMIT 1"
+        );
+        $stmt->execute([':tipo' => $idTipo, ':area' => $idArea]);
+        $abreviaturas = $stmt->fetch();
+        if (!$abreviaturas
+            || !preg_match('/^[A-Z0-9]{2,8}$/', (string)$abreviaturas['tipo'])
+            || !preg_match('/^[A-Z0-9]{2,8}$/', (string)$abreviaturas['area'])) {
+            throw new InvalidArgumentException('El tipo y el área deben tener abreviaturas activas válidas para generar el código del evento.');
+        }
+        return $abreviaturas;
+    }
+
+    /** Genera el identificador público inmutable de un evento recién creado. */
+    private static function generarCodigoAutomatico(string $tipo, string $area, int $idEvento): string {
+        $codigo = sprintf('EVT-%s-%s-%06d', $tipo, $area, $idEvento);
+        if (strlen($codigo) > 30) {
+            throw new RuntimeException('El código automático supera la longitud permitida.');
+        }
+        return $codigo;
     }
 
     /**
@@ -276,6 +333,21 @@ class Evento {
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id_evento' => $id_evento]);
         return $stmt->fetchAll();
+    }
+
+    /** Indica si el usuario ya está asignado al evento con un rol de expositor. */
+    public function usuarioEsExpositorAsignado(int $id_evento, int $id_usuario): bool {
+        $stmt = $this->db->prepare(
+            'SELECT 1 FROM evento_expositores
+             WHERE id_evento = :id_evento AND id_usuario = :id_usuario
+             LIMIT 1'
+        );
+        $stmt->execute([
+            ':id_evento' => $id_evento,
+            ':id_usuario' => $id_usuario,
+        ]);
+
+        return (bool)$stmt->fetchColumn();
     }
 
     /** Obtiene los expositores de varios eventos para la gestión administrativa. */

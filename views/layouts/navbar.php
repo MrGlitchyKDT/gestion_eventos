@@ -21,6 +21,10 @@ if ($rolNav === 'ADMINISTRADOR') {
 $inicialNav = $usuarioNav
     ? mb_strtoupper(mb_substr(trim($usuarioNav['nombres'] ?? 'U'), 0, 1))
     : '';
+$perfilPendienteNav = !empty($usuarioNav['perfil_incompleto']);
+$fotoPerfilNav = !empty($usuarioNav['foto_perfil'])
+    ? 'index.php?action=ver_foto_perfil&v=' . urlencode((string)($usuarioNav['fecha_ultimo_cambio_foto'] ?? '1'))
+    : null;
 ?>
 <nav class="navbar navbar-expand-lg navbar-dark app-navbar shadow-sm sticky-top" style="background-color: #1a428a !important;">
   <div class="container-xl">
@@ -110,13 +114,27 @@ $inicialNav = $usuarioNav
           </li>
           <li class="nav-item">
             <a class="nav-link text-white fw-semibold px-2 py-1 rounded" href="index.php?action=expositor_asistencia">
-              <i class="bi bi-clipboard-check me-1 text-info"></i> Asistencia
+              <i class="bi bi-clipboard-check me-1 text-info"></i> Gestionar asistencia
             </a>
           </li>
-          <li class="nav-item">
-            <a class="nav-link text-white fw-semibold px-2 py-1 rounded" href="index.php?action=mis_certificados">
+          <li class="nav-item dropdown">
+            <button class="btn nav-link text-white fw-semibold px-2 py-1 rounded dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-person-check me-1 text-info"></i> Como participante
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+              <li><a class="dropdown-item" href="index.php?action=participante_dashboard"><i class="bi bi-compass me-2"></i> Eventos disponibles</a></li>
+              <li><a class="dropdown-item" href="index.php?action=mis_inscripciones"><i class="bi bi-journal-bookmark me-2"></i> Mis inscripciones</a></li>
+              <li><a class="dropdown-item" href="index.php?action=mi_asistencia"><i class="bi bi-check2-square me-2"></i> Mi asistencia</a></li>
+            </ul>
+          </li>
+          <li class="nav-item dropdown">
+            <button class="btn nav-link text-white fw-semibold px-2 py-1 rounded dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
               <i class="bi bi-award me-1 text-info"></i> Certificados
-            </a>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+              <li><a class="dropdown-item" href="index.php?action=mis_certificados"><i class="bi bi-award me-2"></i> Mis certificados</a></li>
+              <li><a class="dropdown-item" href="index.php?action=verificar_certificado"><i class="bi bi-patch-check me-2"></i> Verificar certificado</a></li>
+            </ul>
           </li>
         <?php elseif ($rolNav === 'PARTICIPANTE'): ?>
           <li class="nav-item dropdown">
@@ -140,9 +158,10 @@ $inicialNav = $usuarioNav
         <?php endif; ?>
         <?php endif; ?>
         <li class="nav-item dropdown">
-          <button class="btn app-profile-toggle dropdown-toggle d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <span class="app-profile-avatar" aria-hidden="true"><?= htmlspecialchars($inicialNav) ?></span>
+          <button class="btn app-profile-toggle dropdown-toggle d-flex align-items-center gap-2 position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="app-profile-avatar" aria-hidden="true"><?php if ($fotoPerfilNav): ?><img src="<?= htmlspecialchars($fotoPerfilNav) ?>" alt=""><?php else: ?><?= htmlspecialchars($inicialNav) ?><?php endif; ?></span>
             <span class="app-profile-name"><?= htmlspecialchars(trim(($usuarioNav['nombres'] ?? '') . ' ' . ($usuarioNav['apellidos'] ?? ''))) ?></span>
+            <?php if ($perfilPendienteNav): ?><span class="app-profile-pending-dot" aria-label="Hay datos opcionales pendientes en su perfil"></span><?php endif; ?>
           </button>
           <ul class="dropdown-menu dropdown-menu-end app-profile-menu shadow-sm">
             <li class="px-3 py-2 border-bottom">
@@ -150,8 +169,9 @@ $inicialNav = $usuarioNav
               <strong><?= htmlspecialchars($rolNav ?? '') ?></strong>
             </li>
             <li>
-              <a class="dropdown-item" href="index.php?action=perfil">
-                <i class="bi bi-person me-2"></i> Mi perfil
+              <a class="dropdown-item d-flex align-items-center justify-content-between gap-2" href="index.php?action=perfil">
+                <span><i class="bi bi-person me-2"></i> Mi perfil</span>
+                <?php if ($perfilPendienteNav): ?><span class="badge text-bg-warning">Pendiente</span><?php endif; ?>
               </a>
             </li>
             <li>

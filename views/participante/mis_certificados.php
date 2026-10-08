@@ -17,7 +17,7 @@ foreach ($solicitudes as $solicitud) {
     <div>
       <h1 class="h3 fw-bold text-uab-azul mb-1"><i class="bi bi-award me-2"></i>Mis certificados</h1>
       <p class="text-muted mb-0">
-        <?= !empty($esParticipante) ? 'Consulte sus certificados emitidos y solicite una reimpresión si la necesita.' : 'Abra o imprima sus certificados oficiales emitidos.' ?>
+        <?= !empty($requiereEntregaFisica) ? 'Consulte sus certificados emitidos y solicite una reimpresión si la necesita.' : 'Abra o imprima sus certificados oficiales emitidos.' ?>
       </p>
     </div>
     <span class="badge bg-uab-azul fs-6 rounded-pill px-3 py-2"><?= count($certificados) ?> emitido<?= count($certificados) === 1 ? '' : 's' ?></span>
@@ -56,18 +56,18 @@ foreach ($solicitudes as $solicitud) {
               <h2 class="h5 fw-bold mb-2"><?= htmlspecialchars($certificado['evento_titulo']) ?></h2>
               <p class="small text-muted mb-1"><i class="bi bi-file-earmark-text me-1"></i><?= htmlspecialchars($certificado['nombre_plantilla'] ?: 'Certificado oficial') ?></p>
               <p class="small text-muted mb-4"><i class="bi bi-calendar3 me-1"></i>Emitido el <?= date('d/m/Y', strtotime($certificado['fecha_emision'])) ?></p>
-              <?php if (!empty($esParticipante)): ?>
+              <?php if (!empty($requiereEntregaFisica)): ?>
                 <p class="small text-muted border-top pt-3 mb-3"><i class="bi bi-building me-1"></i>La entrega de certificados es presencial en la Dirección de Extensión.</p>
               <?php endif; ?>
               <div class="mt-auto d-flex flex-wrap gap-2">
-                <?php if (empty($esParticipante)): ?>
+                <?php if (empty($requiereEntregaFisica)): ?>
                   <a class="btn btn-uab-azul" target="_blank" href="index.php?action=descargar_certificado&id=<?= (int)$certificado['id_certificado'] ?>"><i class="bi bi-file-earmark-pdf me-1"></i>Abrir PDF</a>
                 <?php endif; ?>
-                <?php if (!empty($esParticipante) && !isset($solicitudEnProcesoPorCertificado[(int)$certificado['id_certificado']])): ?>
+                <?php if (!empty($requiereEntregaFisica) && !isset($solicitudEnProcesoPorCertificado[(int)$certificado['id_certificado']])): ?>
                   <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#modalReimpresion" data-certificado="<?= (int)$certificado['id_certificado'] ?>" data-evento="<?= htmlspecialchars($certificado['evento_titulo'], ENT_QUOTES, 'UTF-8') ?>">
                     <i class="bi bi-arrow-repeat me-1"></i>Reimpresión
                   </button>
-                <?php elseif (!empty($esParticipante)): ?>
+                <?php elseif (!empty($requiereEntregaFisica)): ?>
                   <?php $estadoSolicitud = $solicitudEnProcesoPorCertificado[(int)$certificado['id_certificado']]; ?>
                   <span class="btn btn-outline-secondary disabled"><i class="bi <?= $estadoSolicitud === 'APROBADA' ? 'bi-box-seam' : 'bi-hourglass-split' ?> me-1"></i><?= $estadoSolicitud === 'APROBADA' ? 'Lista para recoger' : 'En revisión' ?></span>
                 <?php endif; ?>

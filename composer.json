@@ -3,6 +3,7 @@
   "description": "Sistema de gestión de eventos académicos y certificaciones.",
   "require": {
     "setasign/fpdf": "*",
-    "setasign/fpdi": "*"
+    "setasign/fpdi": "*",
+    "chillerlan/php-qrcode": "^5.0"
   }
 }

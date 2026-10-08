@@ -247,6 +247,7 @@ INSERT INTO `auditoria_actividad` (`id_auditoria`, `id_usuario`, `accion`, `modu
 CREATE TABLE `categorias` (
   `id_categoria` int(10) UNSIGNED NOT NULL,
   `nombre` varchar(100) NOT NULL,
+  `abreviatura` varchar(8) NOT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -254,12 +255,12 @@ CREATE TABLE `categorias` (
 -- Volcado de datos para la tabla `categorias`
 --
 
-INSERT INTO `categorias` (`id_categoria`, `nombre`, `activo`) VALUES
-(1, 'Tecnología e Informática', 1),
-(2, 'Ciencias de la Salud', 1),
-(3, 'Ciencias Económicas y Empresariales', 1),
-(4, 'Derecho y Ciencias Jurídicas', 1),
-(6, 'Comunicación e Idiomas', 1);
+INSERT INTO `categorias` (`id_categoria`, `nombre`, `abreviatura`, `activo`) VALUES
+(1, 'Tecnología e Informática', 'TEC', 1),
+(2, 'Ciencias de la Salud', 'SAL', 1),
+(3, 'Ciencias Económicas y Empresariales', 'ECO', 1),
+(4, 'Derecho y Ciencias Jurídicas', 'DER', 1),
+(6, 'Comunicación e Idiomas', 'COM', 1);
 
 -- --------------------------------------------------------
 
@@ -667,6 +668,7 @@ INSERT INTO `solicitudes_reimpresion` (`id_solicitud`, `id_certificado`, `id_usu
 CREATE TABLE `tipos_evento` (
   `id_tipo_evento` int(10) UNSIGNED NOT NULL,
   `nombre` varchar(100) NOT NULL,
+  `abreviatura` varchar(8) NOT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -674,15 +676,15 @@ CREATE TABLE `tipos_evento` (
 -- Volcado de datos para la tabla `tipos_evento`
 --
 
-INSERT INTO `tipos_evento` (`id_tipo_evento`, `nombre`, `activo`) VALUES
-(1, 'Curso', 1),
-(2, 'Taller', 1),
-(3, 'Conferencia', 1),
-(4, 'Seminario', 1),
-(5, 'Capacitación Especializada', 1),
-(6, 'Webinar', 1),
-(7, 'Diplomado Internacional', 1),
-(8, 'Workshop', 1);
+INSERT INTO `tipos_evento` (`id_tipo_evento`, `nombre`, `abreviatura`, `activo`) VALUES
+(1, 'Curso', 'CUR', 1),
+(2, 'Taller', 'TAL', 1),
+(3, 'Conferencia', 'CONF', 1),
+(4, 'Seminario', 'SEM', 1),
+(5, 'Capacitación Especializada', 'CAP', 1),
+(6, 'Webinar', 'WEB', 1),
+(7, 'Diplomado Internacional', 'DIP', 1),
+(8, 'Workshop', 'WKS', 1);
 
 -- --------------------------------------------------------
 
@@ -697,6 +699,12 @@ CREATE TABLE `usuarios` (
   `apellidos` varchar(100) NOT NULL,
   `correo` varchar(150) NOT NULL,
   `telefono` varchar(30) DEFAULT NULL,
+  `foto_perfil` varchar(255) DEFAULT NULL,
+  `fecha_ultimo_cambio_foto` datetime DEFAULT NULL,
+  `genero` enum('FEMENINO','MASCULINO','NO_BINARIO','PREFIERO_NO_INDICAR') DEFAULT NULL,
+  `fecha_nacimiento` date DEFAULT NULL,
+  `condicion_academica` enum('ESTUDIANTE','PROFESIONAL') DEFAULT NULL,
+  `institucion` varchar(200) DEFAULT NULL,
   `password_hash` varchar(255) NOT NULL,
   `id_rol` tinyint(3) UNSIGNED NOT NULL DEFAULT 3,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
@@ -750,7 +758,8 @@ ALTER TABLE `auditoria_actividad`
 --
 ALTER TABLE `categorias`
   ADD PRIMARY KEY (`id_categoria`),
-  ADD UNIQUE KEY `nombre` (`nombre`);
+  ADD UNIQUE KEY `nombre` (`nombre`),
+  ADD UNIQUE KEY `abreviatura` (`abreviatura`);
 
 --
 -- Indices de la tabla `certificados`
@@ -866,7 +875,8 @@ ALTER TABLE `solicitudes_reimpresion`
 --
 ALTER TABLE `tipos_evento`
   ADD PRIMARY KEY (`id_tipo_evento`),
-  ADD UNIQUE KEY `nombre` (`nombre`);
+  ADD UNIQUE KEY `nombre` (`nombre`),
+  ADD UNIQUE KEY `abreviatura` (`abreviatura`);
 
 --
 -- Indices de la tabla `usuarios`

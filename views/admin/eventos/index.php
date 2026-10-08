@@ -92,7 +92,7 @@ require_once __DIR__ . '/../../layouts/navbar.php';
                     <button type="button" class="btn btn-sm btn-outline-dark" data-bs-toggle="modal" data-bs-target="#modalQrInscripcion" data-evento-titulo="<?= htmlspecialchars($ev['titulo'], ENT_QUOTES, 'UTF-8') ?>" data-url-inscripcion="<?= htmlspecialchars($urlInscripcionQr, ENT_QUOTES, 'UTF-8') ?>" onclick="prepararQrInscripcion(this)" title="Código QR de inscripción">
                       <i class="bi bi-qr-code"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalInscripcionManual" onclick="prepararInscripcionManual(<?= $ev['id_evento'] ?>, '<?= htmlspecialchars(addslashes($ev['titulo'])) ?>')">
+                    <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalInscripcionManual" data-id-evento="<?= (int)$ev['id_evento'] ?>" data-evento-titulo="<?= htmlspecialchars($ev['titulo'], ENT_QUOTES, 'UTF-8') ?>" onclick="prepararInscripcionManual(this)" title="Inscribir participantes o expositores">
                       <i class="bi bi-person-plus"></i>
                     </button>
                     <a class="btn btn-sm btn-outline-danger" href="index.php?action=admin_certificados&id_evento=<?= $ev['id_evento'] ?>" title="Emitir certificados">
@@ -164,8 +164,9 @@ require_once __DIR__ . '/../../layouts/navbar.php';
         <div class="modal-body p-4">
           <div class="row g-3">
             <div class="col-md-4">
-              <label class="form-label small fw-semibold">Código Único *</label>
-              <input type="text" name="codigo" class="form-control" required placeholder="EVT-2026-001">
+              <label class="form-label small fw-semibold" for="nuevo_codigo_previsualizacion">Código Único</label>
+              <input type="text" id="nuevo_codigo_previsualizacion" class="form-control bg-light" readonly aria-describedby="ayuda_codigo_previsualizacion">
+              <div id="ayuda_codigo_previsualizacion" class="form-text">Se asignará automáticamente al guardar el evento.</div>
             </div>
             <div class="col-md-8">
               <label class="form-label small fw-semibold">Título del Evento *</label>
@@ -173,18 +174,18 @@ require_once __DIR__ . '/../../layouts/navbar.php';
             </div>
 
             <div class="col-md-4">
-              <label class="form-label small fw-semibold">Tipo *</label>
-              <select name="id_tipo_evento" class="form-select" required>
+              <label class="form-label small fw-semibold" for="nuevo_tipo_evento">Tipo *</label>
+              <select id="nuevo_tipo_evento" name="id_tipo_evento" class="form-select" required>
                 <?php foreach ($tipos as $t): ?>
-                  <option value="<?= $t['id_tipo_evento'] ?>"><?= htmlspecialchars($t['nombre']) ?></option>
+                  <option value="<?= $t['id_tipo_evento'] ?>" data-abreviatura="<?= htmlspecialchars($t['abreviatura'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($t['nombre']) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
             <div class="col-md-4">
-              <label class="form-label small fw-semibold">Categoría *</label>
-              <select name="id_categoria" class="form-select" required>
+              <label class="form-label small fw-semibold" for="nuevo_categoria_evento">Área *</label>
+              <select id="nuevo_categoria_evento" name="id_categoria" class="form-select" required>
                 <?php foreach ($categorias as $c): ?>
-                  <option value="<?= $c['id_categoria'] ?>"><?= htmlspecialchars($c['nombre']) ?></option>
+                  <option value="<?= $c['id_categoria'] ?>" data-abreviatura="<?= htmlspecialchars($c['abreviatura'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($c['nombre']) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
@@ -295,7 +296,7 @@ require_once __DIR__ . '/../../layouts/navbar.php';
               </select>
             </div>
             <div class="col-md-4">
-              <label class="form-label small fw-semibold">Categoría *</label>
+              <label class="form-label small fw-semibold">Área *</label>
               <select name="id_categoria" class="form-select" required>
                 <?php foreach ($categorias as $c): ?>
                   <option value="<?= $c['id_categoria'] ?>"><?= htmlspecialchars($c['nombre']) ?></option>
@@ -518,9 +519,9 @@ require_once __DIR__ . '/../../layouts/navbar.php';
 
 <!-- Modal: Gestión de Expositores -->
 <div class="modal fade" id="modalExpositores" tabindex="-1" aria-labelledby="modalExpositoresTitulo" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-scrollable">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <div class="modal-content">
-      <form action="index.php?action=admin_evento_asignar_expositor" method="POST">
+      <form id="formAsignarExpositor" action="index.php?action=admin_evento_asignar_expositor" method="POST">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(AuthHelper::tokenCsrf()) ?>">
         <input type="hidden" name="id_evento" id="expositor_id_evento">
         <div class="modal-header bg-uab-azul text-white">
@@ -534,13 +535,19 @@ require_once __DIR__ . '/../../layouts/navbar.php';
           </div>
           <div class="row g-3">
             <div class="col-12">
-              <label class="form-label small fw-semibold" for="expositor_usuario">Expositor *</label>
-              <select name="id_usuario" id="expositor_usuario" class="form-select" required>
-                <option value="">Seleccione un expositor activo...</option>
-                <?php foreach ($usuarios_expositores as $expositor): ?>
-                  <option value="<?= (int)$expositor['id_usuario'] ?>"><?= htmlspecialchars($expositor['apellidos'] . ', ' . $expositor['nombres'] . ' — ' . $expositor['correo']) ?></option>
-                <?php endforeach; ?>
-              </select>
+              <input type="hidden" name="id_usuario" id="expositor_usuario">
+              <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
+                <label class="form-label small fw-semibold mb-0" for="expositor_buscar">Buscar expositor *</label>
+                <button type="button" id="expositor_limpiar_seleccion" class="btn btn-outline-secondary btn-sm">Limpiar</button>
+              </div>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="search" id="expositor_buscar" class="form-control" autocomplete="off" placeholder="Escriba nombre, apellido o CI">
+              </div>
+              <div class="form-text">Solo se mostrarán cuentas activas con rol de expositor. Escriba al menos dos caracteres.</div>
+              <div id="expositor_resultados" class="border rounded overflow-auto mt-2" style="max-height: 220px;">
+                <div class="text-muted small p-3">Use el buscador para encontrar un expositor por nombre o CI.</div>
+              </div>
             </div>
             <div class="col-12">
               <label class="form-label small fw-semibold" for="rol_expositor">Función en el evento *</label>
@@ -562,36 +569,41 @@ require_once __DIR__ . '/../../layouts/navbar.php';
 </div>
 
 <!-- Modal: Inscripción Manual -->
-<div class="modal fade" id="modalInscripcionManual" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
+<div class="modal fade" id="modalInscripcionManual" tabindex="-1" aria-hidden="true" aria-labelledby="tituloInscripcionManual">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
-      <form action="index.php?action=admin_inscribir_manual" method="POST">
+      <form id="formInscripcionManual" action="index.php?action=admin_inscribir_manual" method="POST">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(AuthHelper::tokenCsrf()) ?>">
         <div class="modal-header bg-uab-verde text-white">
-          <h5 class="modal-title"><i class="bi bi-person-plus me-1"></i> Inscripción Manual Administrativa</h5>
+          <h5 class="modal-title" id="tituloInscripcionManual"><i class="bi bi-person-plus me-1"></i> Inscripción Manual Administrativa</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body p-4">
           <input type="hidden" name="id_evento" id="manual_id_evento">
+          <div id="manual_ids_seleccionados"></div>
           <div class="mb-3">
             <label class="form-label small fw-semibold">Evento Seleccionado</label>
             <input type="text" id="manual_evento_titulo" class="form-control bg-light" readonly>
           </div>
           <div class="mb-3">
-            <label class="form-label small fw-semibold">Seleccione el Participante *</label>
-            <select name="id_usuario" class="form-select" required>
-              <option value="" disabled selected>Seleccione usuario registrado...</option>
-              <?php foreach ($usuarios_participantes as $u): ?>
-                <option value="<?= $u['id_usuario'] ?>">
-                  <?= htmlspecialchars($u['apellidos'] . ' ' . $u['nombres']) ?> (CI: <?= htmlspecialchars($u['ci']) ?>)
-                </option>
-              <?php endforeach; ?>
-            </select>
+            <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
+              <label class="form-label small fw-semibold mb-0" for="manual_buscar_participante">Buscar personas</label>
+              <span id="manual_contador_seleccion" class="badge text-bg-primary">0 seleccionados</span>
+            </div>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input type="search" id="manual_buscar_participante" class="form-control" autocomplete="off" placeholder="Escriba nombre, apellido o CI">
+              <button type="button" id="manual_limpiar_seleccion" class="btn btn-outline-secondary">Limpiar</button>
+            </div>
+            <div class="form-text">Puede seleccionar participantes o expositores. Escriba al menos dos caracteres para buscarlos.</div>
+          </div>
+          <div id="manual_resultados_participantes" class="border rounded overflow-auto" style="max-height: 320px;">
+            <div class="text-muted small p-3">Use el buscador para encontrar participantes o expositores por nombre o CI.</div>
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-uab-verde btn-sm">Confirmar Inscripción</button>
+          <button type="submit" class="btn btn-uab-verde btn-sm"><i class="bi bi-person-plus me-1"></i>Confirmar inscripciones</button>
         </div>
       </form>
     </div>
@@ -616,6 +628,22 @@ require_once __DIR__ . '/../../layouts/navbar.php';
 
 <script>
 let eventoSesionesActivo = null;
+const participantesInscripcionManual = <?= json_encode(array_map(static fn(array $usuario): array => [
+  'id' => (int)$usuario['id_usuario'],
+  'nombres' => (string)$usuario['nombres'],
+  'apellidos' => (string)$usuario['apellidos'],
+  'ci' => (string)$usuario['ci'],
+  'rol' => (string)$usuario['rol_nombre'],
+], $usuarios_participantes), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>;
+const participantesSeleccionadosManual = new Set();
+const expositoresAsignacion = <?= json_encode(array_map(static fn(array $usuario): array => [
+  'id' => (int)$usuario['id_usuario'],
+  'nombres' => (string)$usuario['nombres'],
+  'apellidos' => (string)$usuario['apellidos'],
+  'ci' => (string)$usuario['ci'],
+  'correo' => (string)$usuario['correo'],
+], $usuarios_expositores), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>;
+let expositorSeleccionadoAsignacion = null;
 
 // La base conserva id_categoria por compatibilidad; la interfaz lo presenta como Área.
 document.querySelectorAll('select[name="id_categoria"]').forEach((select) => {
@@ -623,10 +651,168 @@ document.querySelectorAll('select[name="id_categoria"]').forEach((select) => {
   if (etiqueta) etiqueta.textContent = 'Área *';
 });
 
-function prepararInscripcionManual(idEvento, titulo) {
-  document.getElementById('manual_id_evento').value = idEvento;
-  document.getElementById('manual_evento_titulo').value = titulo;
+function normalizarBusquedaParticipante(valor) {
+  return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
 }
+
+function escaparTextoInscripcionManual(valor) {
+  return String(valor ?? '').replace(/[&<>'"]/g, (caracter) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+  }[caracter]));
+}
+
+function renderizarResultadosExpositor() {
+  const campo = document.getElementById('expositor_buscar');
+  const contenedor = document.getElementById('expositor_resultados');
+  if (!campo || !contenedor) return;
+
+  const termino = normalizarBusquedaParticipante(campo.value.trim());
+  const seleccionado = expositoresAsignacion.find((expositor) => expositor.id === expositorSeleccionadoAsignacion);
+  const crearFila = (expositor, seleccionadoActual = false) => {
+    const nombre = escaparTextoInscripcionManual(`${expositor.apellidos} ${expositor.nombres}`);
+    const ci = escaparTextoInscripcionManual(expositor.ci);
+    const correo = escaparTextoInscripcionManual(expositor.correo);
+    return `<label class="d-flex align-items-center gap-3 px-3 py-2 border-top cursor-pointer ${seleccionadoActual ? 'bg-light' : ''}">
+      <input class="form-check-input flex-shrink-0 m-0" type="checkbox" data-seleccionar-expositor="${expositor.id}" ${seleccionadoActual ? 'checked' : ''}>
+      <span><strong>${nombre}</strong><span class="d-block small text-muted">CI: ${ci}${correo ? ` · ${correo}` : ''}</span></span>
+    </label>`;
+  };
+  const bloqueSeleccionado = seleccionado
+    ? `<div class="px-3 py-2 small fw-semibold text-primary bg-light border-bottom"><i class="bi bi-check2-circle me-1"></i>Expositor seleccionado</div>${crearFila(seleccionado, true)}`
+    : '';
+
+  if (termino.length < 2) {
+    contenedor.innerHTML = bloqueSeleccionado + '<div class="text-muted small p-3">Use al menos dos caracteres para buscar por nombre, apellido o CI.</div>';
+  } else {
+    const coincidencias = expositoresAsignacion.filter((expositor) => {
+      const texto = normalizarBusquedaParticipante(`${expositor.nombres} ${expositor.apellidos} ${expositor.ci}`);
+      return texto.includes(termino) && expositor.id !== expositorSeleccionadoAsignacion;
+    });
+    const limite = 50;
+    const aviso = coincidencias.length > limite
+      ? `<div class="small text-muted px-3 pt-2">Mostrando los primeros ${limite} resultados. Especifique más su búsqueda.</div>`
+      : '';
+    contenedor.innerHTML = bloqueSeleccionado + (coincidencias.length
+      ? aviso + coincidencias.slice(0, limite).map((expositor) => crearFila(expositor)).join('')
+      : '<div class="text-muted small p-3">No se encontraron otros expositores activos con esos datos.</div>');
+  }
+
+  contenedor.querySelectorAll('[data-seleccionar-expositor]').forEach((campoSeleccion) => {
+    campoSeleccion.addEventListener('change', () => {
+      expositorSeleccionadoAsignacion = campoSeleccion.checked
+        ? Number(campoSeleccion.dataset.seleccionarExpositor)
+        : null;
+      document.getElementById('expositor_usuario').value = expositorSeleccionadoAsignacion === null
+        ? ''
+        : String(expositorSeleccionadoAsignacion);
+      campo.value = '';
+      renderizarResultadosExpositor();
+    });
+  });
+}
+
+function actualizarSeleccionInscripcionManual() {
+  const contenedor = document.getElementById('manual_ids_seleccionados');
+  contenedor.innerHTML = [...participantesSeleccionadosManual]
+    .map((id) => `<input type="hidden" name="id_usuarios[]" value="${Number(id)}">`)
+    .join('');
+  const cantidad = participantesSeleccionadosManual.size;
+  document.getElementById('manual_contador_seleccion').textContent = `${cantidad} seleccionado${cantidad === 1 ? '' : 's'}`;
+}
+
+function renderizarResultadosInscripcionManual() {
+  const campo = document.getElementById('manual_buscar_participante');
+  const contenedor = document.getElementById('manual_resultados_participantes');
+  const termino = normalizarBusquedaParticipante(campo.value.trim());
+  const seleccionados = participantesInscripcionManual.filter((participante) => participantesSeleccionadosManual.has(participante.id));
+  const crearFila = (participante) => {
+    const seleccionado = participantesSeleccionadosManual.has(participante.id);
+    const nombre = escaparTextoInscripcionManual(`${participante.apellidos} ${participante.nombres}`);
+    const ci = escaparTextoInscripcionManual(participante.ci);
+    const rol = escaparTextoInscripcionManual(participante.rol === 'EXPOSITOR' ? 'Expositor' : 'Participante');
+    return `<label class="d-flex align-items-center gap-3 px-3 py-2 border-top cursor-pointer ${seleccionado ? 'bg-light' : ''}">
+      <input class="form-check-input flex-shrink-0 m-0" type="checkbox" data-participante-manual="${participante.id}" ${seleccionado ? 'checked' : ''}>
+      <span><strong>${nombre}</strong><span class="d-block small text-muted">CI: ${ci} · ${rol}</span></span>
+    </label>`;
+  };
+  const bloqueSeleccionados = seleccionados.length
+    ? `<div class="px-3 py-2 small fw-semibold text-primary bg-light border-bottom"><i class="bi bi-check2-square me-1"></i>Personas seleccionadas</div>${seleccionados.map(crearFila).join('')}`
+    : '';
+
+  if (termino.length < 2) {
+    contenedor.innerHTML = bloqueSeleccionados + '<div class="text-muted small p-3">Use al menos dos caracteres para buscar por nombre, apellido o CI.</div>';
+    activarSeleccionInscripcionManual(contenedor);
+    return;
+  }
+
+  const coincidencias = participantesInscripcionManual.filter((participante) => {
+    const texto = normalizarBusquedaParticipante(`${participante.nombres} ${participante.apellidos} ${participante.ci}`);
+    return texto.includes(termino) && !participantesSeleccionadosManual.has(participante.id);
+  });
+  const limite = 50;
+  const visibles = coincidencias.slice(0, limite);
+  if (!visibles.length) {
+    contenedor.innerHTML = bloqueSeleccionados + '<div class="text-muted small p-3">No se encontraron más personas activas con esos datos.</div>';
+    activarSeleccionInscripcionManual(contenedor);
+    return;
+  }
+
+  const aviso = coincidencias.length > limite
+    ? `<div class="small text-muted px-3 pt-2">Mostrando los primeros ${limite} resultados. Especifique más su búsqueda.</div>`
+    : '';
+  contenedor.innerHTML = bloqueSeleccionados + aviso + visibles.map(crearFila).join('');
+  activarSeleccionInscripcionManual(contenedor);
+}
+
+function activarSeleccionInscripcionManual(contenedor) {
+  contenedor.querySelectorAll('[data-participante-manual]').forEach((campoSeleccion) => {
+    campoSeleccion.addEventListener('change', () => {
+      const id = Number(campoSeleccion.dataset.participanteManual);
+      if (campoSeleccion.checked) participantesSeleccionadosManual.add(id);
+      else participantesSeleccionadosManual.delete(id);
+      actualizarSeleccionInscripcionManual();
+      renderizarResultadosInscripcionManual();
+    });
+  });
+}
+
+function prepararInscripcionManual(boton) {
+  document.getElementById('manual_id_evento').value = boton.dataset.idEvento;
+  document.getElementById('manual_evento_titulo').value = boton.dataset.eventoTitulo;
+  participantesSeleccionadosManual.clear();
+  document.getElementById('manual_buscar_participante').value = '';
+  actualizarSeleccionInscripcionManual();
+  renderizarResultadosInscripcionManual();
+}
+
+document.getElementById('manual_buscar_participante')?.addEventListener('input', renderizarResultadosInscripcionManual);
+document.getElementById('manual_limpiar_seleccion')?.addEventListener('click', () => {
+  participantesSeleccionadosManual.clear();
+  actualizarSeleccionInscripcionManual();
+  renderizarResultadosInscripcionManual();
+});
+document.getElementById('formInscripcionManual')?.addEventListener('submit', (evento) => {
+  if (!participantesSeleccionadosManual.size) {
+    evento.preventDefault();
+    document.getElementById('manual_buscar_participante').focus();
+    window.alert('Seleccione al menos una persona para continuar.');
+  }
+});
+
+document.getElementById('expositor_buscar')?.addEventListener('input', renderizarResultadosExpositor);
+document.getElementById('expositor_limpiar_seleccion')?.addEventListener('click', () => {
+  expositorSeleccionadoAsignacion = null;
+  document.getElementById('expositor_usuario').value = '';
+  document.getElementById('expositor_buscar').value = '';
+  renderizarResultadosExpositor();
+});
+document.getElementById('formAsignarExpositor')?.addEventListener('submit', (evento) => {
+  if (!document.getElementById('expositor_usuario').value) {
+    evento.preventDefault();
+    document.getElementById('expositor_buscar').focus();
+    window.alert('Seleccione un expositor para continuar.');
+  }
+});
 
 function prepararSesionEvento(boton) {
   const evento = JSON.parse(boton.dataset.evento);
@@ -761,6 +947,9 @@ function prepararAsignacionExpositor(boton) {
   document.getElementById('expositor_id_evento').value = evento.id_evento;
   document.getElementById('expositor_evento_titulo').value = `${evento.codigo} — ${evento.titulo}`;
   document.getElementById('expositor_usuario').value = '';
+  expositorSeleccionadoAsignacion = null;
+  document.getElementById('expositor_buscar').value = '';
+  renderizarResultadosExpositor();
   document.getElementById('rol_expositor').value = 'Expositor Principal';
 
   const escaparHtml = (texto) => String(texto ?? '').replace(/[&<>'"]/g, (caracter) => ({
@@ -839,7 +1028,7 @@ function prepararEdicionEvento(boton) {
 function prepararQrInscripcion(boton) {
   const url = boton.dataset.urlInscripcion;
   const titulo = boton.dataset.eventoTitulo;
-  const urlQr = 'https://api.qrserver.com/v1/create-qr-code/?size=600x600&format=png&data=' + encodeURIComponent(url);
+  const urlQr = 'index.php?action=generar_qr&contenido=' + encodeURIComponent(url);
   document.getElementById('qr-inscripcion-evento').textContent = titulo;
   document.getElementById('qr-inscripcion-url').value = url;
   document.getElementById('qr-inscripcion-imagen').src = urlQr;
@@ -856,6 +1045,24 @@ function copiarUrlInscripcionQr() {
     document.execCommand('copy');
   }
 }
+
+function actualizarPrevisualizacionCodigoEvento() {
+  const tipo = document.getElementById('nuevo_tipo_evento');
+  const area = document.getElementById('nuevo_categoria_evento');
+  const destino = document.getElementById('nuevo_codigo_previsualizacion');
+  if (!tipo || !area || !destino) return;
+
+  const abreviaturaTipo = tipo.selectedOptions[0]?.dataset.abreviatura || '';
+  const abreviaturaArea = area.selectedOptions[0]?.dataset.abreviatura || '';
+  destino.value = abreviaturaTipo && abreviaturaArea
+    ? `EVT-${abreviaturaTipo}-${abreviaturaArea}-######`
+    : 'EVT-…-…-######';
+}
+
+document.getElementById('nuevo_tipo_evento')?.addEventListener('change', actualizarPrevisualizacionCodigoEvento);
+document.getElementById('nuevo_categoria_evento')?.addEventListener('change', actualizarPrevisualizacionCodigoEvento);
+document.getElementById('modalNuevoEvento')?.addEventListener('shown.bs.modal', actualizarPrevisualizacionCodigoEvento);
+actualizarPrevisualizacionCodigoEvento();
 </script>
 
 <?php require_once __DIR__ . '/../../layouts/footer.php'; ?>

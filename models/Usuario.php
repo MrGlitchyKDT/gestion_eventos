@@ -21,18 +21,29 @@ class Usuario {
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':correo' => trim($correo)]);
         $res = $stmt->fetch();
-        return $res ?: null;
+        if (!$res) {
+            return null;
+        }
+        $res['perfil_incompleto'] = $this->perfilIncompleto($res);
+        return $res;
     }
 
     public function obtenerPorId(int $id_usuario): ?array {
-        $sql = "SELECT u.id_usuario, u.ci, u.nombres, u.apellidos, u.correo, u.telefono, u.id_rol, u.activo, r.nombre AS rol_nombre
+        $sql = "SELECT u.id_usuario, u.ci, u.nombres, u.apellidos, u.correo, u.telefono,
+                       u.foto_perfil, u.fecha_ultimo_cambio_foto, u.genero, u.fecha_nacimiento,
+                       u.condicion_academica, u.institucion, u.fecha_registro, u.id_rol, u.activo,
+                       r.nombre AS rol_nombre
                 FROM usuarios u
                 INNER JOIN roles r ON u.id_rol = r.id_rol
                 WHERE u.id_usuario = :id_usuario LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id_usuario' => $id_usuario]);
         $res = $stmt->fetch();
-        return $res ?: null;
+        if (!$res) {
+            return null;
+        }
+        $res['perfil_incompleto'] = $this->perfilIncompleto($res);
+        return $res;
     }
 
     /**
@@ -62,16 +73,134 @@ class Usuario {
      * RF-05: Modificación de datos personales
      */
     public function actualizarPerfil(int $id_usuario, array $datos): bool {
+        $nombres = mb_substr(trim((string)($datos['nombres'] ?? '')), 0, 100);
+        $apellidos = mb_substr(trim((string)($datos['apellidos'] ?? '')), 0, 100);
+        $telefono = mb_substr(trim((string)($datos['telefono'] ?? '')), 0, 30);
+        $genero = strtoupper(trim((string)($datos['genero'] ?? '')));
+        $fechaNacimiento = trim((string)($datos['fecha_nacimiento'] ?? ''));
+        $condicion = strtoupper(trim((string)($datos['condicion_academica'] ?? '')));
+        $institucion = mb_substr(trim((string)($datos['institucion'] ?? '')), 0, 200);
+
+        if ($nombres === '' || $apellidos === '') {
+            throw new InvalidArgumentException('Los nombres y apellidos son obligatorios.');
+        }
+        if ($genero !== '' && !in_array($genero, ['FEMENINO', 'MASCULINO', 'NO_BINARIO', 'PREFIERO_NO_INDICAR'], true)) {
+            throw new InvalidArgumentException('El género seleccionado no es válido.');
+        }
+        if ($condicion !== '' && !in_array($condicion, ['ESTUDIANTE', 'PROFESIONAL'], true)) {
+            throw new InvalidArgumentException('La condición académica seleccionada no es válida.');
+        }
+        if ($fechaNacimiento !== '') {
+            $fecha = DateTimeImmutable::createFromFormat('!Y-m-d', $fechaNacimiento);
+            $erroresFecha = DateTimeImmutable::getLastErrors();
+            if (!$fecha || ($erroresFecha !== false && ($erroresFecha['warning_count'] || $erroresFecha['error_count']))
+                || $fecha->format('Y-m-d') !== $fechaNacimiento) {
+                throw new InvalidArgumentException('La fecha de nacimiento no es válida.');
+            }
+            $hoy = new DateTimeImmutable('today');
+            $edad = $fecha->diff($hoy)->y;
+            if ($fecha > $hoy || $edad > 120) {
+                throw new InvalidArgumentException('La fecha de nacimiento debe corresponder a una edad válida.');
+            }
+        }
+
         $sql = "UPDATE usuarios 
-                SET nombres = :nombres, apellidos = :apellidos, telefono = :telefono
+                SET nombres = :nombres, apellidos = :apellidos, telefono = :telefono,
+                    genero = :genero, fecha_nacimiento = :fecha_nacimiento,
+                    condicion_academica = :condicion_academica, institucion = :institucion
                 WHERE id_usuario = :id_usuario";
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([
-            ':nombres'    => trim($datos['nombres']),
-            ':apellidos'  => trim($datos['apellidos']),
-            ':telefono'   => trim($datos['telefono'] ?? ''),
-            ':id_usuario' => $id_usuario
+            ':nombres'               => $nombres,
+            ':apellidos'             => $apellidos,
+            ':telefono'              => $telefono !== '' ? $telefono : null,
+            ':genero'                => $genero !== '' ? $genero : null,
+            ':fecha_nacimiento'      => $fechaNacimiento !== '' ? $fechaNacimiento : null,
+            ':condicion_academica'   => $condicion !== '' ? $condicion : null,
+            ':institucion'           => $institucion !== '' ? $institucion : null,
+            ':id_usuario'            => $id_usuario
         ]);
+    }
+
+    /** Indica si falta alguno de los datos opcionales solicitados para análisis institucional. */
+    public function perfilIncompleto(array $usuario): bool {
+        return empty($usuario['foto_perfil'])
+            || empty($usuario['genero'])
+            || empty($usuario['fecha_nacimiento'])
+            || empty($usuario['condicion_academica'])
+            || trim((string)($usuario['institucion'] ?? '')) === '';
+    }
+
+    /** Guarda una foto de perfil y aplica el intervalo mínimo de 30 días entre cambios. */
+    public function actualizarFotoPerfil(int $idUsuario, array $archivo): void {
+        $usuario = $this->obtenerPorId($idUsuario);
+        if (!$usuario) {
+            throw new InvalidArgumentException('No se encontró la cuenta solicitada.');
+        }
+        if (($archivo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new InvalidArgumentException('Seleccione una imagen para su foto de perfil.');
+        }
+        if (($archivo['size'] ?? 0) < 1 || (int)$archivo['size'] > 2 * 1024 * 1024) {
+            throw new InvalidArgumentException('La foto de perfil no puede superar 2 MB.');
+        }
+        if (!is_uploaded_file((string)($archivo['tmp_name'] ?? ''))) {
+            throw new InvalidArgumentException('No se recibió una imagen válida.');
+        }
+
+        if (!empty($usuario['fecha_ultimo_cambio_foto'])) {
+            $proximaFecha = (new DateTimeImmutable($usuario['fecha_ultimo_cambio_foto']))->modify('+30 days');
+            if ($proximaFecha > new DateTimeImmutable('now')) {
+                throw new InvalidArgumentException('Podrá cambiar su foto nuevamente el ' . $proximaFecha->format('d/m/Y') . '.');
+            }
+        }
+
+        $mime = (new finfo(FILEINFO_MIME_TYPE))->file((string)$archivo['tmp_name']);
+        $extensiones = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+        if (!isset($extensiones[$mime])) {
+            throw new InvalidArgumentException('La foto debe estar en formato JPG, PNG o WEBP.');
+        }
+        $dimensiones = @getimagesize((string)$archivo['tmp_name']);
+        if (!$dimensiones || (int)$dimensiones[0] < 32 || (int)$dimensiones[1] < 32
+            || (int)$dimensiones[0] > 5000 || (int)$dimensiones[1] > 5000) {
+            throw new InvalidArgumentException('La imagen debe medir entre 32 y 5000 píxeles por lado.');
+        }
+
+        $directorio = __DIR__ . '/../storage/fotos_perfil';
+        if (!is_dir($directorio) && !mkdir($directorio, 0755, true) && !is_dir($directorio)) {
+            throw new RuntimeException('No se pudo preparar el almacenamiento de fotos de perfil.');
+        }
+        $nombreArchivo = 'perfil_' . $idUsuario . '_' . bin2hex(random_bytes(16)) . '.' . $extensiones[$mime];
+        $rutaDestino = $directorio . '/' . $nombreArchivo;
+        if (!move_uploaded_file((string)$archivo['tmp_name'], $rutaDestino)) {
+            throw new RuntimeException('No se pudo guardar la foto de perfil.');
+        }
+
+        try {
+            $stmt = $this->db->prepare('UPDATE usuarios SET foto_perfil = :foto, fecha_ultimo_cambio_foto = NOW() WHERE id_usuario = :id');
+            $stmt->execute([':foto' => $nombreArchivo, ':id' => $idUsuario]);
+        } catch (Throwable $e) {
+            @unlink($rutaDestino);
+            throw $e;
+        }
+
+        $fotoAnterior = basename((string)($usuario['foto_perfil'] ?? ''));
+        if ($fotoAnterior !== '' && $fotoAnterior !== $nombreArchivo) {
+            $rutaAnterior = $directorio . '/' . $fotoAnterior;
+            if (is_file($rutaAnterior)) {
+                @unlink($rutaAnterior);
+            }
+        }
+    }
+
+    /** Ruta privada de la foto del propio usuario, lista para ser servida por el controlador. */
+    public function rutaFotoPerfil(int $idUsuario): ?string {
+        $usuario = $this->obtenerPorId($idUsuario);
+        $nombre = basename((string)($usuario['foto_perfil'] ?? ''));
+        if ($nombre === '') {
+            return null;
+        }
+        $ruta = __DIR__ . '/../storage/fotos_perfil/' . $nombre;
+        return is_file($ruta) ? $ruta : null;
     }
 
     /**

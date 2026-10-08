@@ -121,6 +121,12 @@ $porcentajeOcupacion = ($evento['cupo_maximo'] > 0) ? min(100, round(($evento['t
               <div>Usted ya se encuentra formalmente inscrito en este evento.</div>
             </div>
             <a href="index.php?action=mis_inscripciones" class="btn btn-outline-secondary btn-sm w-100">Ver mis inscripciones</a>
+          <?php elseif ($esExpositorAsignado): ?>
+            <div class="alert alert-info small py-2 d-flex align-items-center gap-2 mb-2">
+              <i class="bi bi-person-badge-fill fs-5"></i>
+              <div>Ya está asignado como expositor en este evento; no necesita inscribirse como participante.</div>
+            </div>
+            <button class="btn btn-outline-primary btn-sm w-100" disabled>Expositor asignado</button>
           <?php elseif (!$disponibilidad['habilitado']): ?>
             <div class="alert alert-warning small py-2">
               <i class="bi bi-exclamation-triangle me-1"></i><?= htmlspecialchars($disponibilidad['motivo']) ?>
@@ -128,6 +134,7 @@ $porcentajeOcupacion = ($evento['cupo_maximo'] > 0) ? min(100, round(($evento['t
             <button class="btn btn-secondary w-100 py-2" disabled>Inscripciones no disponibles</button>
           <?php else: ?>
             <form action="index.php?action=inscribirse_evento" method="POST">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(AuthHelper::tokenCsrf()) ?>">
               <input type="hidden" name="id_evento" value="<?= $evento['id_evento'] ?>">
               <button type="submit" class="btn btn-uab-verde w-100 py-2 fw-semibold">
                 <i class="bi bi-pencil-square me-1"></i>Confirmar Inscripción

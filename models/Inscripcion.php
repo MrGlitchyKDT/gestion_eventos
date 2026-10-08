@@ -118,6 +118,120 @@ class Inscripcion {
     }
 
     /**
+     * Registra varias inscripciones administrativas como una sola operación.
+     * La operación no realiza cambios si alguna de las personas no es válida,
+     * ya está inscrito o el cupo no alcanza para todo el grupo.
+     *
+     * @return int[] Identificadores de las inscripciones creadas o reactivadas.
+     */
+    public function registrarLoteAdministrativo(int $idEvento, array $idsUsuarios): array {
+        $idsUsuarios = array_values(array_unique(array_filter(
+            array_map(static function ($id): int {
+                $id = filter_var($id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+                return $id === false ? 0 : (int)$id;
+            }, $idsUsuarios),
+            static fn(int $id): bool => $id > 0
+        )));
+
+        if ($idEvento < 1 || !$idsUsuarios) {
+            throw new InvalidArgumentException('Seleccione al menos una persona válida.');
+        }
+        if (count($idsUsuarios) > 100) {
+            throw new InvalidArgumentException('Solo se pueden registrar hasta 100 participantes por operación.');
+        }
+
+        try {
+            $this->db->beginTransaction();
+
+            $eventoStmt = $this->db->prepare(
+                'SELECT cupo_maximo FROM eventos WHERE id_evento = ? FOR UPDATE'
+            );
+            $eventoStmt->execute([$idEvento]);
+            $evento = $eventoStmt->fetch();
+            if (!$evento) {
+                throw new RuntimeException('El evento seleccionado no existe.');
+            }
+
+            $marcadores = implode(',', array_fill(0, count($idsUsuarios), '?'));
+            $participantesStmt = $this->db->prepare(
+                "SELECT u.id_usuario
+                 FROM usuarios u
+                 INNER JOIN roles r ON r.id_rol = u.id_rol
+                 WHERE u.id_usuario IN ({$marcadores})
+                   AND u.activo = 1
+                   AND UPPER(TRIM(r.nombre)) IN ('PARTICIPANTE', 'EXPOSITOR')
+                  FOR UPDATE"
+            );
+            $participantesStmt->execute($idsUsuarios);
+            $participantesValidos = array_map('intval', array_column($participantesStmt->fetchAll(), 'id_usuario'));
+            if (count($participantesValidos) !== count($idsUsuarios)) {
+                throw new RuntimeException('Una o más cuentas ya no están activas o no tienen rol PARTICIPANTE o EXPOSITOR.');
+            }
+
+            $existentesStmt = $this->db->prepare(
+                "SELECT id_inscripcion, id_usuario, estado
+                 FROM inscripciones
+                 WHERE id_evento = ? AND id_usuario IN ({$marcadores})
+                 FOR UPDATE"
+            );
+            $existentesStmt->execute(array_merge([$idEvento], $idsUsuarios));
+            $existentes = $existentesStmt->fetchAll();
+            $inscritosActivos = array_filter($existentes, static fn(array $inscripcion): bool => $inscripcion['estado'] !== 'CANCELADO');
+            if ($inscritosActivos) {
+                throw new RuntimeException('Una o más personas seleccionadas ya cuentan con una inscripción activa en este evento.');
+            }
+
+            $totalActualStmt = $this->db->prepare(
+                "SELECT COUNT(*) FROM inscripciones WHERE id_evento = ? AND estado = 'INSCRITO'"
+            );
+            $totalActualStmt->execute([$idEvento]);
+            $totalActual = (int)$totalActualStmt->fetchColumn();
+            if ((int)$evento['cupo_maximo'] > 0 && $totalActual + count($idsUsuarios) > (int)$evento['cupo_maximo']) {
+                $disponibles = max(0, (int)$evento['cupo_maximo'] - $totalActual);
+                throw new RuntimeException("No hay cupos suficientes para el grupo seleccionado. Cupos disponibles: {$disponibles}.");
+            }
+
+            $existentesPorUsuario = [];
+            foreach ($existentes as $existente) {
+                $existentesPorUsuario[(int)$existente['id_usuario']] = $existente;
+            }
+
+            $reactivarStmt = $this->db->prepare(
+                "UPDATE inscripciones
+                 SET estado = 'INSCRITO', codigo_inscripcion = ?, origen = 'ADMINISTRATIVO',
+                     fecha_inscripcion = NOW(), motivo_cancelacion = NULL
+                 WHERE id_inscripcion = ?"
+            );
+            $insertarStmt = $this->db->prepare(
+                "INSERT INTO inscripciones
+                    (codigo_inscripcion, id_evento, id_usuario, estado, origen, porcentaje_asistencia, habilitado_certificado, fecha_inscripcion)
+                 VALUES (?, ?, ?, 'INSCRITO', 'ADMINISTRATIVO', 0.00, 0, NOW())"
+            );
+
+            $idsInscripcion = [];
+            foreach ($idsUsuarios as $idUsuario) {
+                $codigo = 'INS-' . date('Y') . '-' . strtoupper(bin2hex(random_bytes(4)));
+                if (isset($existentesPorUsuario[$idUsuario])) {
+                    $idInscripcion = (int)$existentesPorUsuario[$idUsuario]['id_inscripcion'];
+                    $reactivarStmt->execute([$codigo, $idInscripcion]);
+                } else {
+                    $insertarStmt->execute([$codigo, $idEvento, $idUsuario]);
+                    $idInscripcion = (int)$this->db->lastInsertId();
+                }
+                $idsInscripcion[] = $idInscripcion;
+            }
+
+            $this->db->commit();
+            return $idsInscripcion;
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    /**
      * RF-12: Cancelación voluntaria de inscripción por parte del participante
      */
     public function cancelar(int $id_inscripcion, int $id_usuario, string $motivo = 'Cancelación por el usuario'): bool {

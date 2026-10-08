@@ -47,17 +47,20 @@ $seccionActiva = $seccion_activa ?? '';
         <i class="bi bi-clipboard-check me-2"></i> Mis Eventos
       </a>
       <a class="nav-link nav-link-compact <?= ($seccionActiva === 'asistencia') ? 'active' : '' ?>" href="index.php?action=expositor_asistencia">
-        <i class="bi bi-check2-square me-2"></i> Asistencia
+        <i class="bi bi-check2-square me-2"></i> Gestionar asistencia
       </a>
       <hr class="my-1 text-muted">
     <?php endif; ?>
 
-    <?php if ($rol === 'PARTICIPANTE'): ?>
+    <?php if (in_array($rol, ['PARTICIPANTE', 'EXPOSITOR'], true)): ?>
     <a class="nav-link nav-link-compact <?= ($seccionActiva === 'dashboard_participante') ? 'active' : '' ?>" href="index.php?action=participante_dashboard">
       <i class="bi bi-compass me-2"></i> Explorar Eventos
     </a>
     <a class="nav-link nav-link-compact <?= ($seccionActiva === 'mis_inscripciones') ? 'active' : '' ?>" href="index.php?action=mis_inscripciones">
       <i class="bi bi-journal-bookmark me-2"></i> Mis Inscripciones
+    </a>
+    <a class="nav-link nav-link-compact <?= ($seccionActiva === 'mi_asistencia') ? 'active' : '' ?>" href="index.php?action=mi_asistencia">
+      <i class="bi bi-check2-square me-2"></i> Mi asistencia
     </a>
     <a class="nav-link nav-link-compact <?= ($seccionActiva === 'mis_certificados') ? 'active' : '' ?>" href="index.php?action=mis_certificados">
       <i class="bi bi-award me-2"></i> Mis Certificados

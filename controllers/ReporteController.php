@@ -32,6 +32,18 @@ class ReporteController {
         ];
     }
 
+    /** Filtros independientes para el bloque demográfico Datos de eventos. */
+    public function normalizarFiltrosDatos(array $entrada): array {
+        return $this->normalizarFiltros([
+            'fecha_desde' => $entrada['datos_fecha_desde'] ?? null,
+            'fecha_hasta' => $entrada['datos_fecha_hasta'] ?? null,
+            'id_categoria' => $entrada['datos_id_categoria'] ?? null,
+            'id_tipo_evento' => $entrada['datos_id_tipo_evento'] ?? null,
+            'habilitado' => $entrada['datos_habilitado'] ?? null,
+            'buscar' => $entrada['datos_buscar'] ?? null,
+        ]);
+    }
+
     /** Filtros exclusivos de la analítica mensual y sus casillas. */
     public function normalizarFiltrosResumen(array $entrada): array {
         $anioSeleccionado = filter_var($entrada['resumen_anio'] ?? null, FILTER_VALIDATE_INT);
@@ -81,7 +93,7 @@ class ReporteController {
     }
 
     /** Lista eventos; el rango opcional incluye aquellos que se cruzan con las fechas indicadas. */
-    public function eventosDelPeriodo(array $filtros): array {
+    public function eventosDelPeriodo(array $filtros, ?int $limite = null): array {
         $filtros = $this->normalizarFiltros($filtros);
         $where = [];
         $params = [];
@@ -121,9 +133,173 @@ class ReporteController {
                 INNER JOIN categorias c ON c.id_categoria = e.id_categoria
                 " . ($where ? 'WHERE ' . implode(' AND ', $where) : '') . "
                 ORDER BY e.fecha_inicio ASC, e.titulo ASC";
+        if ($limite !== null) {
+            $sql .= ' LIMIT ' . max(1, min(1000, (int)$limite));
+        }
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
+    }
+
+    /** Eventos disponibles para el análisis demográfico, sin limitar por período. */
+    public function eventosParaDatos(array $filtros = [], ?int $limite = null): array {
+        $filtros = $this->normalizarFiltros($filtros);
+        $where = [];
+        $params = [];
+        if ($filtros['fecha_hasta']) {
+            $where[] = 'e.fecha_inicio <= :hasta';
+            $params[':hasta'] = $filtros['fecha_hasta'];
+        }
+        if ($filtros['fecha_desde']) {
+            $where[] = 'e.fecha_fin >= :desde';
+            $params[':desde'] = $filtros['fecha_desde'];
+        }
+        if ($filtros['id_categoria']) {
+            $where[] = 'e.id_categoria = :area';
+            $params[':area'] = $filtros['id_categoria'];
+        }
+        if ($filtros['id_tipo_evento']) {
+            $where[] = 'e.id_tipo_evento = :tipo';
+            $params[':tipo'] = $filtros['id_tipo_evento'];
+        }
+        if ($filtros['habilitado'] === 'SI') {
+            $where[] = "e.estado = 'PUBLICADO'";
+        } elseif ($filtros['habilitado'] === 'NO') {
+            $where[] = "e.estado <> 'PUBLICADO'";
+        }
+        if ($filtros['buscar'] !== '') {
+            $where[] = 'e.titulo LIKE :buscar';
+            $params[':buscar'] = '%' . $filtros['buscar'] . '%';
+        }
+        $sql = "SELECT e.id_evento, e.codigo, e.titulo, e.fecha_inicio, e.fecha_fin,
+                       te.nombre AS tipo_evento, c.nombre AS area,
+                       COUNT(i.id_inscripcion) AS total_inscritos
+                FROM eventos e
+                INNER JOIN tipos_evento te ON te.id_tipo_evento = e.id_tipo_evento
+                INNER JOIN categorias c ON c.id_categoria = e.id_categoria
+                LEFT JOIN inscripciones i ON i.id_evento = e.id_evento AND i.estado <> 'CANCELADO'
+                " . ($where ? 'WHERE ' . implode(' AND ', $where) : '') . "
+                GROUP BY e.id_evento, e.codigo, e.titulo, e.fecha_inicio, e.fecha_fin, te.nombre, c.nombre
+                ORDER BY e.fecha_inicio DESC, e.titulo ASC";
+        if ($limite !== null) {
+            $sql .= ' LIMIT ' . max(1, min(1000, (int)$limite));
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    /** Distribuciones demográficas de las personas inscritas activamente en un evento. */
+    public function datosDemograficosPorEvento(int $idEvento): array {
+        $consultarDistribucion = function (string $campo) use ($idEvento): array {
+            $stmt = $this->db->prepare(
+                "SELECT COALESCE(NULLIF(u.{$campo}, ''), 'SIN_REGISTRO') AS clave,
+                        COUNT(DISTINCT i.id_usuario) AS total
+                 FROM inscripciones i
+                 INNER JOIN usuarios u ON u.id_usuario = i.id_usuario
+                 WHERE i.id_evento = :evento AND i.estado <> 'CANCELADO'
+                 GROUP BY COALESCE(NULLIF(u.{$campo}, ''), 'SIN_REGISTRO')"
+            );
+            $stmt->execute([':evento' => $idEvento]);
+            return $stmt->fetchAll();
+        };
+
+        $formatear = static function (array $filas, array $etiquetas): array {
+            $porClave = [];
+            foreach ($filas as $fila) $porClave[(string)$fila['clave']] = (int)$fila['total'];
+            $resultado = [];
+            foreach ($etiquetas as $clave => $etiqueta) {
+                if (isset($porClave[$clave]) && $porClave[$clave] > 0) {
+                    $resultado[] = ['etiqueta' => $etiqueta, 'total' => $porClave[$clave]];
+                    unset($porClave[$clave]);
+                }
+            }
+            foreach ($porClave as $clave => $total) {
+                if ($total > 0) $resultado[] = ['etiqueta' => ucwords(mb_strtolower(str_replace('_', ' ', $clave))), 'total' => $total];
+            }
+            return $resultado;
+        };
+
+        $genero = $formatear($consultarDistribucion('genero'), [
+            'FEMENINO' => 'Femenino',
+            'MASCULINO' => 'Masculino',
+            'NO_BINARIO' => 'No binario',
+            'PREFIERO_NO_INDICAR' => 'Prefiere no indicar',
+            'SIN_REGISTRO' => 'Sin registro',
+        ]);
+        $condicionAcademica = $formatear($consultarDistribucion('condicion_academica'), [
+            'ESTUDIANTE' => 'Estudiante',
+            'PROFESIONAL' => 'Profesional',
+            'SIN_REGISTRO' => 'Sin registro',
+        ]);
+
+        $edadesStmt = $this->db->prepare(
+            "SELECT TIMESTAMPDIFF(YEAR, u.fecha_nacimiento, CURDATE()) AS edad
+             FROM inscripciones i
+             INNER JOIN usuarios u ON u.id_usuario = i.id_usuario
+             WHERE i.id_evento = :evento AND i.estado <> 'CANCELADO'"
+        );
+        $edadesStmt->execute([':evento' => $idEvento]);
+        $rangosEdad = [];
+        foreach ($edadesStmt->fetchAll(PDO::FETCH_COLUMN) as $edad) {
+            $edad = filter_var($edad, FILTER_VALIDATE_INT);
+            $etiqueta = ($edad === false || $edad < 0 || $edad > 120)
+                ? 'Sin registro'
+                : (intdiv((int)$edad, 10) * 10) . '–' . (intdiv((int)$edad, 10) * 10 + 9) . ' años';
+            $rangosEdad[$etiqueta] = ($rangosEdad[$etiqueta] ?? 0) + 1;
+        }
+        uksort($rangosEdad, static function (string $a, string $b): int {
+            if ($a === 'Sin registro') return 1;
+            if ($b === 'Sin registro') return -1;
+            return (int)$a <=> (int)$b;
+        });
+        $edad = array_map(static fn(string $etiqueta, int $total): array => ['etiqueta' => $etiqueta, 'total' => $total], array_keys($rangosEdad), array_values($rangosEdad));
+
+        return [
+            'total' => array_sum(array_column($genero, 'total')),
+            'genero' => $genero,
+            'condicion_academica' => $condicionAcademica,
+            'edad' => $edad,
+        ];
+    }
+
+    /** Respuesta JSON para actualizar los gráficos del bloque Datos de eventos. */
+    public function datosDemograficosEventoJson(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        $idEvento = filter_input(INPUT_GET, 'id_evento', FILTER_VALIDATE_INT);
+        $evento = $idEvento ? $this->obtenerEvento($idEvento) : null;
+        header('Content-Type: application/json; charset=UTF-8');
+        if (!$evento) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'mensaje' => 'El evento solicitado no existe.'], JSON_UNESCAPED_UNICODE);
+            exit();
+        }
+        echo json_encode([
+            'ok' => true,
+            'evento' => ['id' => (int)$evento['id_evento'], 'titulo' => $evento['titulo']],
+            'datos' => $this->datosDemograficosPorEvento((int)$idEvento),
+        ], JSON_UNESCAPED_UNICODE);
+        exit();
+    }
+
+    /** Lista completa de eventos para el módulo de reportes. */
+    public function listaEventos(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        $filtrosReporte = $this->normalizarFiltros($_GET);
+        $areasReporte = $this->listarAreas();
+        $tiposReporte = $this->listarTipos();
+        $eventosReporte = $this->eventosDelPeriodo($filtrosReporte);
+        require __DIR__ . '/../views/admin/reportes/eventos.php';
+    }
+
+    /** Lista completa exclusiva del bloque Datos de eventos. */
+    public function listaEventosDatos(): void {
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
+        $filtrosDatos = $this->normalizarFiltrosDatos($_GET);
+        $areasReporte = $this->listarAreas();
+        $tiposReporte = $this->listarTipos();
+        $eventosDatos = $this->eventosParaDatos($filtrosDatos);
+        require __DIR__ . '/../views/admin/reportes/datos_eventos.php';
     }
 
     /** Consolidado mensual para el gráfico circular y el detalle de áreas. */

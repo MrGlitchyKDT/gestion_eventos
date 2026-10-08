@@ -24,7 +24,7 @@ Plataforma web integral para administrar eventos académicos, controlar cupos, r
 | **Capa Frontend** | HTML5, Bootstrap 5.3.3 y Bootstrap Icons 1.11.3, incluidos localmente |
 | **Tipografía** | Poppins y Open Sans, incluidas localmente |
 | **Arquitectura** | MVC Nativo + Front Controller + Singleton PDO |
-| **PDF** | `setasign/fpdf` y `setasign/fpdi`, administrados con Composer |
+| **PDF y códigos QR** | `setasign/fpdf`, `setasign/fpdi` y `chillerlan/php-qrcode`, administrados con Composer e incluidos en `vendor/` |
 | **Seguridad** | Hashing con `Bcrypt` (`password_hash`), CSRF, RBAC y sentencias preparadas PDO |
 
 ---
@@ -51,6 +51,7 @@ La autenticación consulta `usuarios` y `roles` mediante PDO, valida la contrase
 * PHP requiere las extensiones `pdo_mysql`, `mbstring` y `fileinfo`. La conexión se configura en `config/Database.php`.
 * Las dependencias PHP se instalan desde el archivo `composer.json`. En un entorno nuevo, ejecute `composer install` desde la raíz del proyecto.
 * Las dependencias de interfaz están en `public/assets/vendor`; el encabezado y el pie de página no requieren conexión a CDN para cargar Bootstrap, sus iconos ni las fuentes.
+* Los códigos QR se generan localmente con `chillerlan/php-qrcode`: la interfaz recibe SVG desde `generar_qr` y los certificados PDF dibujan el QR directamente con FPDF. No se consulta ningún servicio externo para crear QR.
 
 ### Pruebas de autenticación
 

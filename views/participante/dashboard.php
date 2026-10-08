@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../helpers/AuthHelper.php';
-AuthHelper::requerirRol(['PARTICIPANTE', 'ADMINISTRADOR']);
-$titulo_pagina = "Portal Académico — Convocatorias Abiertas";
+AuthHelper::requerirRol(['PARTICIPANTE', 'EXPOSITOR', 'ADMINISTRADOR']);
+$titulo_pagina = "Eventos disponibles — CERT-DIE";
 $seccion_activa = "dashboard_participante";
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/navbar.php'; 
@@ -72,6 +72,7 @@ require_once __DIR__ . '/../layouts/navbar.php';
       <div class="row g-4 row-cols-1 row-cols-md-2 row-cols-xl-3" id="contenedorEventos">
         <?php foreach ($eventosAbiertos as $ev): 
           $yaInscrito = in_array((int)$ev['id_evento'], $misEventosIds, true);
+          $esExpositorAsignado = in_array((int)$ev['id_evento'], $misEventosComoExpositorIds ?? [], true);
           $cuposMax = (int)$ev['cupo_maximo'];
           $inscritos = (int)$ev['total_inscritos'];
           $lleno = ($cuposMax > 0 && $inscritos >= $cuposMax);
@@ -158,12 +159,17 @@ require_once __DIR__ . '/../layouts/navbar.php';
                       <button class="btn btn-sm btn-outline-success w-100 rounded-pill fw-semibold py-2 d-flex align-items-center justify-content-center gap-1" disabled>
                         <i class="bi bi-check-circle-fill"></i> <span>Inscrito</span>
                       </button>
+                    <?php elseif ($esExpositorAsignado): ?>
+                      <button class="btn btn-sm btn-outline-primary w-100 rounded-pill fw-semibold py-2 d-flex align-items-center justify-content-center gap-1" disabled title="Ya tiene un rol asignado como expositor en este evento">
+                        <i class="bi bi-person-badge-fill"></i> <span>Expositor asignado</span>
+                      </button>
                     <?php elseif ($lleno): ?>
                       <button class="btn btn-sm btn-secondary w-100 rounded-pill fw-semibold py-2" disabled title="No quedan cupos disponibles">
                         <span>Agotado</span>
                       </button>
                     <?php else: ?>
                       <form action="index.php?action=inscribirse_evento" method="POST" class="m-0">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(AuthHelper::tokenCsrf()) ?>">
                         <input type="hidden" name="id_evento" value="<?= $ev['id_evento'] ?>">
                         <button type="submit" class="btn btn-sm btn-uab-azul w-100 rounded-pill fw-semibold py-2 shadow-sm d-flex align-items-center justify-content-center gap-1">
                           <i class="bi bi-pencil-square"></i> <span>Inscribirme</span>

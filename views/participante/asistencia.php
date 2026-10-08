@@ -1,6 +1,6 @@
 <?php
 $titulo_pagina = 'Mi asistencia — CERT-DIE';
-$seccion_activa = 'mis_inscripciones';
+$seccion_activa = 'mi_asistencia';
 $escapar = static fn($valor): string => htmlspecialchars((string)$valor, ENT_QUOTES, 'UTF-8');
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/navbar.php';

@@ -129,7 +129,16 @@ class AdminController {
         $tiposReporte = $reporteController->listarTipos();
         $resumenAreas = $reporteController->resumenPorAreas($filtrosResumen);
         $resumenTipos = $reporteController->resumenPorTipos($filtrosResumen);
-        $eventosReporte = $reporteController->eventosDelPeriodo($filtrosReporte);
+        $filtrosDatos = $reporteController->normalizarFiltrosDatos($_GET);
+        $eventosDatos = $reporteController->eventosParaDatos($filtrosDatos, 11);
+        $hayMasEventosDatos = count($eventosDatos) > 10;
+        $eventosDatos = array_slice($eventosDatos, 0, 10);
+        $idEventoDatosSeleccionado = filter_input(INPUT_GET, 'datos_evento_id', FILTER_VALIDATE_INT) ?: null;
+        // El panel sólo muestra los diez eventos más próximos. La lista completa
+        // se consulta en una pantalla independiente para evitar que crezca sin límite.
+        $eventosReporte = $reporteController->eventosDelPeriodo($filtrosReporte, 11);
+        $hayMasEventosReporte = count($eventosReporte) > 10;
+        $eventosReporte = array_slice($eventosReporte, 0, 10);
         $cursosHabilitados = array_sum(array_map(static fn(array $fila): int => (int)$fila['cursos_habilitados'], $resumenAreas));
 
         // Los detalles viven en rutas independientes para no sobrecargar el resumen.
@@ -372,21 +381,43 @@ class AdminController {
         ];
         $definicion = $definiciones[$catalogo] ?? null;
         $nombre = mb_substr(trim($_POST['nombre'] ?? ''), 0, 100);
+        $abreviatura = strtoupper(mb_substr(trim($_POST['abreviatura'] ?? ''), 0, 8));
         $admin  = AuthHelper::obtenerUsuario();
 
-        if ($definicion && $nombre !== '') {
-            $stmt = $this->db->prepare("INSERT INTO {$definicion['tabla']} (nombre, activo) VALUES (:nombre, 1) ON DUPLICATE KEY UPDATE activo = 1");
-            $stmt->execute([':nombre' => $nombre]);
+        try {
+            if (!$definicion || $nombre === '') {
+                throw new InvalidArgumentException('Ingrese un nombre y seleccione una configuración válida.');
+            }
+            if (!preg_match('/^[A-Z0-9]{2,8}$/', $abreviatura)) {
+                throw new InvalidArgumentException('La abreviatura debe tener entre 2 y 8 letras o números en mayúscula.');
+            }
+
+            $existente = $this->db->prepare("SELECT {$definicion['clave']} AS id, nombre, abreviatura FROM {$definicion['tabla']} WHERE nombre = :nombre OR abreviatura = :abreviatura LIMIT 1");
+            $existente->execute([':nombre' => $nombre, ':abreviatura' => $abreviatura]);
+            $registro = $existente->fetch();
+            if ($registro && $registro['nombre'] !== $nombre) {
+                throw new InvalidArgumentException("La abreviatura {$abreviatura} ya está asignada a {$registro['nombre']}.");
+            }
+            if ($registro && $registro['abreviatura'] !== $abreviatura) {
+                throw new InvalidArgumentException("{$definicion['etiqueta']} {$nombre} ya existe con la abreviatura {$registro['abreviatura']}.");
+            }
+            if ($registro) {
+                $activar = $this->db->prepare("UPDATE {$definicion['tabla']} SET activo = 1 WHERE {$definicion['clave']} = :id");
+                $activar->execute([':id' => $registro['id']]);
+            } else {
+                $stmt = $this->db->prepare("INSERT INTO {$definicion['tabla']} (nombre, abreviatura, activo) VALUES (:nombre, :abreviatura, 1)");
+                $stmt->execute([':nombre' => $nombre, ':abreviatura' => $abreviatura]);
+            }
 
             Auditoria::registrar(
                 (int)$admin['id_usuario'],
                 'GUARDAR_CATALOGO_EVENTO',
                 'EVENTOS',
-                "{$definicion['etiqueta']} guardado: {$nombre}"
+                "{$definicion['etiqueta']} guardado: {$nombre} ({$abreviatura})"
             );
             $_SESSION['success'] = "{$definicion['etiqueta']} guardado con éxito.";
-        } else {
-            $_SESSION['error'] = 'Ingrese un nombre y seleccione una configuración válida.';
+        } catch (Exception $e) {
+            $_SESSION['error'] = $e->getMessage();
         }
 
         header('Location: index.php?action=admin_configuracion_eventos');
@@ -453,22 +484,31 @@ class AdminController {
             exit();
         }
 
-        $id_evento  = filter_input(INPUT_POST, 'id_evento', FILTER_VALIDATE_INT);
-        $id_usuario = filter_input(INPUT_POST, 'id_usuario', FILTER_VALIDATE_INT);
+        $id_evento = filter_input(INPUT_POST, 'id_evento', FILTER_VALIDATE_INT);
+        $idsUsuarios = $_POST['id_usuarios'] ?? ($_POST['id_usuario'] ?? []);
+        if (!is_array($idsUsuarios)) {
+            $idsUsuarios = [$idsUsuarios];
+        }
         $admin      = AuthHelper::obtenerUsuario();
 
         try {
-            $idInscripcion = $this->inscripcionModel->registrar($id_evento, $id_usuario, 'ADMINISTRATIVO');
+            if (!$id_evento) {
+                throw new InvalidArgumentException('El evento seleccionado no es válido.');
+            }
+            $idsInscripcion = $this->inscripcionModel->registrarLoteAdministrativo((int)$id_evento, $idsUsuarios);
+            $cantidad = count($idsInscripcion);
 
             Auditoria::registrar(
                 (int)$admin['id_usuario'],
-                'INSCRIPCION_MANUAL',
+                'INSCRIPCION_MANUAL_LOTE',
                 'INSCRIPCIONES',
-                "Inscripción manual forzada para el usuario ID #{$id_usuario} en el evento #{$id_evento} (Inscripción #{$idInscripcion})"
+                "Inscripción manual de {$cantidad} persona(s) en el evento #{$id_evento} (inscripciones: " . implode(', ', $idsInscripcion) . ')'
             );
 
-            $_SESSION['success'] = 'La inscripción manual se realizó correctamente.';
-        } catch (Exception $e) {
+            $_SESSION['success'] = $cantidad === 1
+                ? 'La inscripción manual se realizó correctamente.'
+                : "Se realizaron correctamente {$cantidad} inscripciones manuales.";
+        } catch (Throwable $e) {
             $_SESSION['error'] = "Error en inscripción manual: " . $e->getMessage();
         }
 

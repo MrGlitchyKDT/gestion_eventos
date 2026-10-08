@@ -130,6 +130,9 @@ class AuthHelper {
             'nombres'    => $usuario['nombres'],
             'apellidos'  => $usuario['apellidos'],
             'correo'     => $usuario['correo'],
+            'foto_perfil' => $usuario['foto_perfil'] ?? null,
+            'fecha_ultimo_cambio_foto' => $usuario['fecha_ultimo_cambio_foto'] ?? null,
+            'perfil_incompleto' => !empty($usuario['perfil_incompleto']),
             'id_rol'     => (int)$usuario['id_rol'],
             'rol_nombre' => strtoupper(trim($usuario['rol_nombre']))
         ];

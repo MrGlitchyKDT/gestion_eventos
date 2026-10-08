@@ -246,6 +246,7 @@ $promedioAsistencia = !empty($inscripciones) ? round($sumaAsistencias / count($i
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content rounded-4 border-0 shadow-lg overflow-hidden">
       <form action="index.php?action=cancelar_inscripcion" method="POST">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(AuthHelper::tokenCsrf()) ?>">
         <div class="modal-header bg-danger text-white border-0 py-3">
           <div class="d-flex align-items-center gap-2">
             <i class="bi bi-exclamation-octagon-fill fs-5"></i>

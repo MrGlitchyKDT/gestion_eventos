@@ -213,8 +213,8 @@ class CertificadoController {
     }
 
     public function descargarPdf(): void {
-        // Los certificados de participantes se entregan únicamente de forma física.
-        AuthHelper::requerirRol(['ADMINISTRADOR', 'EXPOSITOR']);
+        // Participantes y expositores reciben el documento mediante entrega física.
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
         $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
         $certificado = $id ? $this->certificadoModel->obtenerPorId($id) : null;
         $usuario = AuthHelper::obtenerUsuario();
@@ -306,7 +306,7 @@ class CertificadoController {
 
         $certificados = $this->certificadoModel->listarPorUsuario((int)$usuario['id_usuario']);
         $solicitudes = $this->reimpresionModel->listarPorUsuario((int)$usuario['id_usuario']);
-        $esParticipante = ($usuario['rol_nombre'] ?? '') === 'PARTICIPANTE';
+        $requiereEntregaFisica = in_array(($usuario['rol_nombre'] ?? ''), ['PARTICIPANTE', 'EXPOSITOR'], true);
 
         require_once __DIR__ . '/../views/participante/mis_certificados.php';
     }
@@ -315,7 +315,7 @@ class CertificadoController {
      * RF-17 y RF-18: El participante solicita la reimpresión indicando motivo
      */
     public function procesarSolicitudReimpresion(): void {
-        AuthHelper::requerirRol(['PARTICIPANTE']);
+        AuthHelper::requerirRol(['PARTICIPANTE', 'EXPOSITOR']);
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
             if ($_SERVER['REQUEST_METHOD'] === 'POST') $_SESSION['error'] = 'La solicitud expiró. Inténtelo de nuevo.';
@@ -503,7 +503,7 @@ class CertificadoController {
      * RF-57, RF-58 y RF-64: Vista formal imprimible / guardado en PDF
      */
     public function imprimir(): void {
-        AuthHelper::requerirRol(['ADMINISTRADOR', 'EXPOSITOR']);
+        AuthHelper::requerirRol(['ADMINISTRADOR']);
         $codigo = trim($_GET['codigo'] ?? '');
         if (empty($codigo)) {
             die("Código de certificado no proporcionado.");

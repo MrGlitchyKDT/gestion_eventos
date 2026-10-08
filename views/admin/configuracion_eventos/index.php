@@ -34,11 +34,15 @@ $escapar = static fn($valor): string => htmlspecialchars((string)$valor, ENT_QUO
               <form action="index.php?action=admin_catalogo_evento_guardar" method="POST" class="row g-2 mb-4">
                 <input type="hidden" name="csrf_token" value="<?= $escapar(AuthHelper::tokenCsrf()) ?>">
                 <input type="hidden" name="catalogo" value="<?= $clave ?>">
-                <div class="col-sm-8">
+                <div class="col-sm-6">
                   <label class="visually-hidden" for="nombre_<?= $clave ?>">Nombre</label>
                   <input type="text" class="form-control" id="nombre_<?= $clave ?>" name="nombre" maxlength="100" required placeholder="Nuevo <?= $clave === 'tipo' ? 'tipo de evento' : 'área' ?>">
                 </div>
-                <div class="col-sm-4 d-grid">
+                <div class="col-sm-3">
+                  <label class="visually-hidden" for="abreviatura_<?= $clave ?>">Abreviatura</label>
+                  <input type="text" class="form-control text-uppercase" id="abreviatura_<?= $clave ?>" name="abreviatura" maxlength="8" pattern="[A-Za-z0-9]{2,8}" required placeholder="Abrev.">
+                </div>
+                <div class="col-sm-3 d-grid">
                   <button class="btn btn-uab-azul" type="submit"><i class="bi bi-plus-lg me-1"></i> Agregar</button>
                 </div>
               </form>
@@ -51,6 +55,7 @@ $escapar = static fn($valor): string => htmlspecialchars((string)$valor, ENT_QUO
                     <div class="list-group-item d-flex align-items-center justify-content-between gap-2">
                       <div class="text-truncate">
                         <strong><?= $escapar($item['nombre']) ?></strong>
+                        <code class="ms-1"><?= $escapar($item['abreviatura']) ?></code>
                         <span class="badge <?= (int)$item['activo'] === 1 ? 'bg-success' : 'bg-secondary' ?> ms-1"><?= (int)$item['activo'] === 1 ? 'Activo' : 'Inactivo' ?></span>
                         <?php if ((int)$item['eventos_asociados'] > 0): ?>
                           <div class="small text-muted"><?= (int)$item['eventos_asociados'] ?> evento(s) asociado(s)</div>

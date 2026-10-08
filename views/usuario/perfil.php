@@ -11,6 +11,19 @@ $u = $usuarioModel->obtenerPorId((int)$usuarioSesion['id_usuario']);
 $inicial = strtoupper(substr($u['nombres'] ?? 'U', 0, 1));
 $nombreCompleto = htmlspecialchars(($u['nombres'] ?? '') . ' ' . ($u['apellidos'] ?? ''));
 $rolNombre = htmlspecialchars($u['rol_nombre'] ?? 'PARTICIPANTE');
+$fotoPerfilUrl = !empty($u['foto_perfil'])
+  ? 'index.php?action=ver_foto_perfil&v=' . urlencode((string)($u['fecha_ultimo_cambio_foto'] ?? '1'))
+  : null;
+$edad = null;
+if (!empty($u['fecha_nacimiento'])) {
+  $edad = (new DateTimeImmutable($u['fecha_nacimiento']))->diff(new DateTimeImmutable('today'))->y;
+}
+$puedeCambiarFoto = true;
+$proximaFechaFoto = null;
+if (!empty($u['fecha_ultimo_cambio_foto'])) {
+  $proximaFechaFoto = (new DateTimeImmutable($u['fecha_ultimo_cambio_foto']))->modify('+30 days');
+  $puedeCambiarFoto = $proximaFechaFoto <= new DateTimeImmutable('now');
+}
 ?>
 
 <main class="container-fluid px-3 px-md-4 py-3">
@@ -26,7 +39,11 @@ $rolNombre = htmlspecialchars($u['rol_nombre'] ?? 'PARTICIPANTE');
           <div class="col-auto">
             <div class="d-flex align-items-center justify-content-center rounded-circle border border-3 border-white border-opacity-25 shadow" 
                  style="width: 80px; height: 80px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(8px); font-size: 2rem; font-weight: 700; color: #ffffff;">
-              <?= $inicial ?>
+              <?php if ($fotoPerfilUrl): ?>
+                <img src="<?= htmlspecialchars($fotoPerfilUrl) ?>" alt="Foto de perfil" class="w-100 h-100 rounded-circle" style="object-fit: cover;">
+              <?php else: ?>
+                <?= $inicial ?>
+              <?php endif; ?>
             </div>
           </div>
 
@@ -85,7 +102,33 @@ $rolNombre = htmlspecialchars($u['rol_nombre'] ?? 'PARTICIPANTE');
               </div>
             </div>
 
+            <div class="border rounded-3 p-3 mb-4 bg-light">
+              <div class="d-flex align-items-center gap-3 flex-wrap">
+                <div class="rounded-circle bg-uab-azul text-white d-flex align-items-center justify-content-center overflow-hidden flex-shrink-0" style="width:64px;height:64px;font-size:1.4rem;font-weight:700;">
+                  <?php if ($fotoPerfilUrl): ?>
+                    <img src="<?= htmlspecialchars($fotoPerfilUrl) ?>" alt="Foto de perfil actual" class="w-100 h-100" style="object-fit:cover;">
+                  <?php else: ?>
+                    <?= $inicial ?>
+                  <?php endif; ?>
+                </div>
+                <div class="flex-grow-1">
+                  <h3 class="h6 mb-1">Foto de perfil <span class="text-muted fw-normal">(opcional)</span></h3>
+                  <p class="small text-muted mb-0">JPG, PNG o WEBP. Máximo 2 MB. La foto puede cambiarse una vez cada 30 días.</p>
+                </div>
+                <form action="index.php?action=actualizar_foto_perfil" method="POST" enctype="multipart/form-data" class="d-flex align-items-center gap-2 flex-wrap">
+                  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(AuthHelper::tokenCsrf()) ?>">
+                  <label class="visually-hidden" for="foto_perfil">Seleccionar foto de perfil</label>
+                  <input id="foto_perfil" class="form-control form-control-sm" type="file" name="foto_perfil" accept="image/jpeg,image/png,image/webp" <?= $puedeCambiarFoto ? '' : 'disabled' ?> required>
+                  <button class="btn btn-sm btn-uab-azul" <?= $puedeCambiarFoto ? '' : 'disabled' ?>><i class="bi bi-camera me-1"></i><?= $fotoPerfilUrl ? 'Cambiar foto' : 'Subir foto' ?></button>
+                </form>
+              </div>
+              <?php if (!$puedeCambiarFoto && $proximaFechaFoto): ?>
+                <div class="form-text mt-2"><i class="bi bi-clock-history me-1"></i>Podrá cambiarla nuevamente el <?= $proximaFechaFoto->format('d/m/Y') ?>.</div>
+              <?php endif; ?>
+            </div>
+
             <form action="index.php?action=actualizar_perfil" method="POST">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(AuthHelper::tokenCsrf()) ?>">
               <div class="row g-3">
                 <div class="col-md-6">
                   <label class="form-label small fw-semibold text-muted">Cédula de Identidad (CI)</label>
@@ -128,6 +171,37 @@ $rolNombre = htmlspecialchars($u['rol_nombre'] ?? 'PARTICIPANTE');
                     <input type="tel" name="telefono" class="form-control border-start-0" placeholder="+591 ..." value="<?= htmlspecialchars($u['telefono'] ?? '') ?>">
                   </div>
                 </div>
+
+                <div class="col-md-6">
+                  <label class="form-label small fw-semibold" for="perfil_genero">Género <span class="text-muted fw-normal">(opcional)</span></label>
+                  <select id="perfil_genero" name="genero" class="form-select">
+                    <option value="">Prefiero no indicar</option>
+                    <option value="FEMENINO" <?= ($u['genero'] ?? '') === 'FEMENINO' ? 'selected' : '' ?>>Femenino</option>
+                    <option value="MASCULINO" <?= ($u['genero'] ?? '') === 'MASCULINO' ? 'selected' : '' ?>>Masculino</option>
+                    <option value="NO_BINARIO" <?= ($u['genero'] ?? '') === 'NO_BINARIO' ? 'selected' : '' ?>>No binario</option>
+                    <option value="PREFIERO_NO_INDICAR" <?= ($u['genero'] ?? '') === 'PREFIERO_NO_INDICAR' ? 'selected' : '' ?>>Prefiero no indicar</option>
+                  </select>
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label small fw-semibold" for="perfil_fecha_nacimiento">Fecha de nacimiento <span class="text-muted fw-normal">(opcional)</span></label>
+                  <input id="perfil_fecha_nacimiento" type="date" name="fecha_nacimiento" class="form-control" value="<?= htmlspecialchars($u['fecha_nacimiento'] ?? '') ?>" max="<?= date('Y-m-d') ?>">
+                  <?php if ($edad !== null): ?><div class="form-text">Edad actual: <?= (int)$edad ?> años.</div><?php endif; ?>
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label small fw-semibold" for="perfil_condicion">Condición académica <span class="text-muted fw-normal">(opcional)</span></label>
+                  <select id="perfil_condicion" name="condicion_academica" class="form-select">
+                    <option value="">Seleccione una opción</option>
+                    <option value="ESTUDIANTE" <?= ($u['condicion_academica'] ?? '') === 'ESTUDIANTE' ? 'selected' : '' ?>>Estudiante</option>
+                    <option value="PROFESIONAL" <?= ($u['condicion_academica'] ?? '') === 'PROFESIONAL' ? 'selected' : '' ?>>Profesional</option>
+                  </select>
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label small fw-semibold" for="perfil_institucion">Institución de pertenencia <span class="text-muted fw-normal">(opcional)</span></label>
+                  <input id="perfil_institucion" type="text" name="institucion" class="form-control" maxlength="200" value="<?= htmlspecialchars($u['institucion'] ?? '') ?>" placeholder="Universidad, empresa u organización">
+                </div>
               </div>
 
               <div class="mt-4 pt-2 text-end">
@@ -155,6 +229,7 @@ $rolNombre = htmlspecialchars($u['rol_nombre'] ?? 'PARTICIPANTE');
             </div>
 
             <form action="index.php?action=actualizar_password" method="POST" id="formPassword">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(AuthHelper::tokenCsrf()) ?>">
               <div class="mb-3">
                 <label class="form-label small fw-semibold">Contraseña Actual <span class="text-danger">*</span></label>
                 <div class="input-group">

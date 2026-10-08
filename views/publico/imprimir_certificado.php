@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Certificado - <?= htmlspecialchars($certificado['codigo_unico']) ?></title>
-    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+    <link rel="stylesheet" href="assets/vendor/bootstrap/css/bootstrap.min.css">
     <style>
         @page {
             size: A4 landscape;

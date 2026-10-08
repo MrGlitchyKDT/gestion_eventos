@@ -24,7 +24,8 @@ $rutas_publicas = [
     'do_recuperar',
     'reestablecer',
     'do_reestablecer',
-    'verificar_certificado'
+    'verificar_certificado',
+    'generar_qr'
 ];
 
 // 2. Control de acceso perimetral
@@ -53,6 +54,20 @@ switch ($action) {
         require_once __DIR__ . '/../controllers/CertificadoController.php';
         (new CertificadoController())->verificarPublico();
         break;
+
+    case 'generar_qr':
+        require_once __DIR__ . '/../helpers/QrHelper.php';
+        try {
+            $contenidoQr = (string)($_GET['contenido'] ?? '');
+            $svgQr = QrHelper::generarSvg($contenidoQr);
+            header('Content-Type: image/svg+xml; charset=UTF-8');
+            header('Cache-Control: public, max-age=3600');
+            header('X-Content-Type-Options: nosniff');
+            echo $svgQr;
+        } catch (Throwable $e) {
+            http_response_code(400);
+        }
+        exit();
 
     case 'imprimir_certificado':
         require_once __DIR__ . '/../controllers/CertificadoController.php';
@@ -105,6 +120,7 @@ switch ($action) {
         break;
 
     case 'perfil':
+        AuthHelper::requerirRol(['ADMINISTRADOR', 'EXPOSITOR', 'PARTICIPANTE']);
         require_once __DIR__ . '/../views/usuario/perfil.php';
         break;
 
@@ -112,14 +128,63 @@ switch ($action) {
         AuthHelper::requerirRol(['ADMINISTRADOR', 'EXPOSITOR', 'PARTICIPANTE']);
         $usr = AuthHelper::obtenerUsuario();
         require_once __DIR__ . '/../models/Usuario.php';
-        (new Usuario())->actualizarPerfil((int)$usr['id_usuario'], $_POST);
-        $_SESSION['success'] = "Datos personales actualizados correctamente.";
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+                throw new InvalidArgumentException('No se pudo validar la actualización del perfil.');
+            }
+            (new Usuario())->actualizarPerfil((int)$usr['id_usuario'], $_POST);
+            $_SESSION['success'] = 'Datos personales actualizados correctamente.';
+        } catch (Throwable $e) {
+            $_SESSION['error'] = $e->getMessage();
+        }
         header('Location: index.php?action=perfil');
+        exit();
+
+    case 'actualizar_foto_perfil':
+        AuthHelper::requerirRol(['ADMINISTRADOR', 'EXPOSITOR', 'PARTICIPANTE']);
+        $usr = AuthHelper::obtenerUsuario();
+        require_once __DIR__ . '/../models/Usuario.php';
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+                throw new InvalidArgumentException('No se pudo validar la actualización de la foto.');
+            }
+            (new Usuario())->actualizarFotoPerfil((int)$usr['id_usuario'], $_FILES['foto_perfil'] ?? []);
+            $_SESSION['success'] = 'La foto de perfil fue actualizada correctamente.';
+        } catch (Throwable $e) {
+            $_SESSION['error'] = $e->getMessage();
+        }
+        header('Location: index.php?action=perfil');
+        exit();
+
+    case 'ver_foto_perfil':
+        AuthHelper::requerirRol(['ADMINISTRADOR', 'EXPOSITOR', 'PARTICIPANTE']);
+        $usr = AuthHelper::obtenerUsuario();
+        require_once __DIR__ . '/../models/Usuario.php';
+        $rutaFoto = (new Usuario())->rutaFotoPerfil((int)$usr['id_usuario']);
+        if (!$rutaFoto) {
+            http_response_code(404);
+            exit();
+        }
+        $mimeFoto = (new finfo(FILEINFO_MIME_TYPE))->file($rutaFoto);
+        if (!in_array($mimeFoto, ['image/jpeg', 'image/png', 'image/webp'], true)) {
+            http_response_code(404);
+            exit();
+        }
+        header('Content-Type: ' . $mimeFoto);
+        header('Content-Length: ' . filesize($rutaFoto));
+        header('Cache-Control: private, max-age=3600');
+        header('X-Content-Type-Options: nosniff');
+        readfile($rutaFoto);
         exit();
 
     case 'actualizar_password':
         AuthHelper::requerirRol(['ADMINISTRADOR', 'EXPOSITOR', 'PARTICIPANTE']);
         $usr = AuthHelper::obtenerUsuario();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !AuthHelper::validarCsrf($_POST['csrf_token'] ?? null)) {
+            $_SESSION['error'] = 'No se pudo validar el cambio de contraseña.';
+            header('Location: index.php?action=perfil');
+            exit();
+        }
         $db = Database::getConnection();
         $stmt = $db->prepare("SELECT password_hash FROM usuarios WHERE id_usuario = ?");
         $stmt->execute([(int)$usr['id_usuario']]);
@@ -149,7 +214,7 @@ switch ($action) {
         break;
 
     case 'mis_inscripciones':
-        AuthHelper::requerirRol(['PARTICIPANTE', 'ADMINISTRADOR']);
+        AuthHelper::requerirRol(['PARTICIPANTE', 'EXPOSITOR', 'ADMINISTRADOR']);
         $usuario = AuthHelper::obtenerUsuario();
         require_once __DIR__ . '/../models/Inscripcion.php';
         $inscripciones = (new Inscripcion())->listarPorUsuario((int)$usuario['id_usuario']);
@@ -254,8 +319,16 @@ switch ($action) {
         $db = Database::getConnection();
         $tipos = $db->query("SELECT * FROM tipos_evento WHERE activo = 1")->fetchAll();
         $categorias = $db->query("SELECT * FROM categorias WHERE activo = 1")->fetchAll();
-        $usuarios_participantes = $db->query("SELECT id_usuario, nombres, apellidos, ci FROM usuarios WHERE activo = 1 ORDER BY apellidos ASC")->fetchAll();
-        $usuarios_expositores = $db->query("SELECT u.id_usuario, u.nombres, u.apellidos, u.correo FROM usuarios u INNER JOIN roles r ON r.id_rol = u.id_rol WHERE u.activo = 1 AND r.nombre = 'EXPOSITOR' ORDER BY u.apellidos ASC, u.nombres ASC")->fetchAll();
+        $usuarios_participantes = $db->query("SELECT u.id_usuario, u.nombres, u.apellidos, u.ci, UPPER(TRIM(r.nombre)) AS rol_nombre
+            FROM usuarios u
+            INNER JOIN roles r ON r.id_rol = u.id_rol
+            WHERE u.activo = 1 AND UPPER(TRIM(r.nombre)) IN ('PARTICIPANTE', 'EXPOSITOR')
+            ORDER BY u.apellidos ASC, u.nombres ASC")->fetchAll();
+        $usuarios_expositores = $db->query("SELECT u.id_usuario, u.nombres, u.apellidos, u.ci, u.correo
+            FROM usuarios u
+            INNER JOIN roles r ON r.id_rol = u.id_rol
+            WHERE u.activo = 1 AND UPPER(TRIM(r.nombre)) = 'EXPOSITOR'
+            ORDER BY u.apellidos ASC, u.nombres ASC")->fetchAll();
         require_once __DIR__ . '/../views/admin/eventos/index.php';
         break;
 
@@ -448,6 +521,21 @@ switch ($action) {
     case 'admin_reportes':
         require_once __DIR__ . '/../controllers/AdminController.php';
         (new AdminController())->reportes();
+        break;
+
+    case 'admin_datos_evento':
+        require_once __DIR__ . '/../controllers/ReporteController.php';
+        (new ReporteController())->datosDemograficosEventoJson();
+        break;
+
+    case 'admin_datos_eventos':
+        require_once __DIR__ . '/../controllers/ReporteController.php';
+        (new ReporteController())->listaEventosDatos();
+        break;
+
+    case 'admin_reporte_eventos':
+        require_once __DIR__ . '/../controllers/ReporteController.php';
+        (new ReporteController())->listaEventos();
         break;
 
     case 'admin_reporte_evento':

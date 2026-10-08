@@ -1,5 +1,10 @@
 <?php
 // helpers/QrHelper.php
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use chillerlan\QRCode\Data\Byte;
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
 
 class QrHelper {
     /**
@@ -26,10 +31,46 @@ class QrHelper {
         return "{$protocolo}://{$host}{$baseDir}/index.php?action=detalle_evento&id=" . $idEvento;
     }
 
-    /**
-     * Retorna la URL de renderizado dinámico del código QR (utilizable directamente en <img>)
-     */
+    /** Retorna una ruta local que sirve el QR como SVG, sin depender de servicios externos. */
     public static function generarImagenQr(string $urlContenido, int $dimension = 150): string {
-        return "https://api.qrserver.com/v1/create-qr-code/?size={$dimension}x{$dimension}&data=" . urlencode($urlContenido);
+        $script = $_SERVER['SCRIPT_NAME'] ?? '/index.php';
+        return $script . '?action=generar_qr&contenido=' . rawurlencode($urlContenido) . '&d=' . max(64, min(1200, $dimension));
+    }
+
+    /** Genera el SVG para mostrar un QR en el navegador. */
+    public static function generarSvg(string $contenido): string {
+        self::validarContenido($contenido);
+        $opciones = new QROptions([
+            'outputBase64' => false,
+            'quietzoneSize' => 4,
+        ]);
+        return (new QRCode($opciones))->render($contenido);
+    }
+
+    /** Dibuja módulos QR directamente sobre un documento FPDF/FPDI sin archivos ni red. */
+    public static function dibujarEnPdf(\FPDF $pdf, string $contenido, float $x, float $y, float $lado): void {
+        self::validarContenido($contenido);
+        $opciones = new QROptions(['quietzoneSize' => 4]);
+        $matriz = (new QRCode($opciones))->addSegment(new Byte($contenido))->getQRMatrix();
+        $modulos = $matriz->getMatrix();
+        $cantidad = max(1, $matriz->getSize());
+        $paso = $lado / $cantidad;
+
+        $pdf->SetFillColor(255, 255, 255);
+        $pdf->Rect($x, $y, $lado, $lado, 'F');
+        $pdf->SetFillColor(0, 0, 0);
+        foreach ($modulos as $fila => $valores) {
+            foreach ($valores as $columna => $tipoModulo) {
+                if ($matriz->isDark($tipoModulo)) {
+                    $pdf->Rect($x + ($columna * $paso), $y + ($fila * $paso), $paso, $paso, 'F');
+                }
+            }
+        }
+    }
+
+    private static function validarContenido(string $contenido): void {
+        if ($contenido === '' || mb_strlen($contenido) > 2048 || preg_match('/[\x00-\x1F\x7F]/', $contenido)) {
+            throw new InvalidArgumentException('El contenido para generar el código QR no es válido.');
+        }
     }
 }
