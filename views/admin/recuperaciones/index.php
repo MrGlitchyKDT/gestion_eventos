@@ -1,5 +1,5 @@
 <?php
-$titulo_pagina = 'Buzón de recuperación de acceso — CERT-DIE';
+$titulo_pagina = 'Buzón de recuperación de acceso — DIE-CERT';
 $seccion_activa = 'recuperaciones';
 require_once __DIR__ . '/../../layouts/header.php';
 require_once __DIR__ . '/../../layouts/navbar.php';

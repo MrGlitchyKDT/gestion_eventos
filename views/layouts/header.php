@@ -26,7 +26,7 @@ $stylesVersion = @filemtime(__DIR__ . '/../../public/assets/css/styles.css') ?: 
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <title>
-    <?= htmlspecialchars($titulo_pagina ?? 'CERT-DIE — Sistema de Gestión') ?>
+    <?= htmlspecialchars($titulo_pagina ?? 'DIE-CERT — Sistema de Gestión') ?>
   </title>
 
   <!-- Dependencias locales: permiten operar sin CDN. -->

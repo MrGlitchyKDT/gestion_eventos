@@ -1,6 +1,6 @@
 <?php
 
-$titulo_pagina = "Iniciar Sesión — CERT-DIE";
+$titulo_pagina = "Iniciar Sesión — DIE-CERT";
 $esAuth = true;
 $esLogin = true;
 require_once __DIR__ . '/../layouts/header.php';

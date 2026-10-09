@@ -1,5 +1,5 @@
 <?php
-$titulo_pagina = 'Detalle de evento — Reportes CERT-DIE';
+$titulo_pagina = 'Detalle de evento — Reportes DIE-CERT';
 $seccion_activa = 'reportes';
 require_once __DIR__ . '/../../layouts/header.php';
 require_once __DIR__ . '/../../layouts/navbar.php';

@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../helpers/AuthHelper.php';
 AuthHelper::requerirRol(['PARTICIPANTE', 'EXPOSITOR', 'ADMINISTRADOR']);
-$titulo_pagina = "Eventos disponibles — CERT-DIE";
+$titulo_pagina = "Eventos disponibles — DIE-CERT";
 $seccion_activa = "dashboard_participante";
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/navbar.php'; 

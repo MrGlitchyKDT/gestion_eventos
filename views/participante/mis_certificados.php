@@ -1,5 +1,5 @@
 <?php
-$titulo_pagina = 'Mis certificados — CERT-DIE';
+$titulo_pagina = 'Mis certificados — DIE-CERT';
 $seccion_activa = 'mis_certificados';
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/navbar.php';
@@ -20,7 +20,12 @@ foreach ($solicitudes as $solicitud) {
         <?= !empty($requiereEntregaFisica) ? 'Consulte sus certificados emitidos y solicite una reimpresión si la necesita.' : 'Abra o imprima sus certificados oficiales emitidos.' ?>
       </p>
     </div>
-    <span class="badge bg-uab-azul fs-6 rounded-pill px-3 py-2"><?= count($certificados) ?> emitido<?= count($certificados) === 1 ? '' : 's' ?></span>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalInstruccionesReimpresion">
+        <i class="bi bi-question-circle me-1"></i>¿Cómo solicitar mi reimpresión?
+      </button>
+      <span class="badge bg-uab-azul fs-6 rounded-pill px-3 py-2"><?= count($certificados) ?> emitido<?= count($certificados) === 1 ? '' : 's' ?></span>
+    </div>
   </div>
 
   <?php foreach (['success' => 'success', 'error' => 'danger'] as $clave => $tipo): ?>
@@ -92,6 +97,24 @@ foreach ($solicitudes as $solicitud) {
     </section>
   <?php endif; ?>
 </main>
+
+<div class="modal fade" id="modalInstruccionesReimpresion" tabindex="-1" aria-labelledby="tituloInstruccionesReimpresion" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header bg-uab-azul text-white">
+      <h2 class="modal-title h5" id="tituloInstruccionesReimpresion"><i class="bi bi-info-circle me-2"></i>Solicitud de reimpresión</h2>
+      <button class="btn-close btn-close-white" type="button" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+    </div>
+    <div class="modal-body p-4">
+      <p class="mb-3">Siga estos pasos para solicitar la reimpresión de su certificado:</p>
+      <ol class="mb-0 ps-3">
+        <li class="mb-3">Solicite su ficha en la caja del Edificio Central de la Universidad Autónoma del Beni, ubicado en Av. 6 de Agosto 55.</li>
+        <li class="mb-3">Adjunte su boleta de pago en la solicitud de reimpresión e indique las razones de la reimpresión.</li>
+        <li>Espere a que se apruebe su solicitud y luego recoja su certificado en la Dirección de Investigación y Extensión de Postgrado.</li>
+      </ol>
+    </div>
+    <div class="modal-footer"><button class="btn btn-uab-azul" type="button" data-bs-dismiss="modal">Entendido</button></div>
+  </div></div>
+</div>
 
 <div class="modal fade" id="modalReimpresion" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered"><div class="modal-content">

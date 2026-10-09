@@ -240,20 +240,20 @@ class ReporteController {
              WHERE i.id_evento = :evento AND i.estado <> 'CANCELADO'"
         );
         $edadesStmt->execute([':evento' => $idEvento]);
-        $rangosEdad = [];
+        $edades = [];
         foreach ($edadesStmt->fetchAll(PDO::FETCH_COLUMN) as $edad) {
             $edad = filter_var($edad, FILTER_VALIDATE_INT);
             $etiqueta = ($edad === false || $edad < 0 || $edad > 120)
                 ? 'Sin registro'
-                : (intdiv((int)$edad, 10) * 10) . '–' . (intdiv((int)$edad, 10) * 10 + 9) . ' años';
-            $rangosEdad[$etiqueta] = ($rangosEdad[$etiqueta] ?? 0) + 1;
+                : (int)$edad . ' años';
+            $edades[$etiqueta] = ($edades[$etiqueta] ?? 0) + 1;
         }
-        uksort($rangosEdad, static function (string $a, string $b): int {
+        uksort($edades, static function (string $a, string $b): int {
             if ($a === 'Sin registro') return 1;
             if ($b === 'Sin registro') return -1;
             return (int)$a <=> (int)$b;
         });
-        $edad = array_map(static fn(string $etiqueta, int $total): array => ['etiqueta' => $etiqueta, 'total' => $total], array_keys($rangosEdad), array_values($rangosEdad));
+        $edad = array_map(static fn(string $etiqueta, int $total): array => ['etiqueta' => $etiqueta, 'total' => $total], array_keys($edades), array_values($edades));
 
         return [
             'total' => array_sum(array_column($genero, 'total')),

@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../helpers/AuthHelper.php';
 AuthHelper::requerirRol(['EXPOSITOR', 'ADMINISTRADOR']);
 
-$titulo_pagina = 'Control de asistencia — CERT-DIE';
+$titulo_pagina = 'Control de asistencia — DIE-CERT';
 $seccion_activa = 'asistencia';
 $escapar = static fn($valor): string => htmlspecialchars((string)$valor, ENT_QUOTES, 'UTF-8');
 $estadoActual = static fn($estado): string => $estado === 'SIN_REGISTRO' ? '' : $estado;

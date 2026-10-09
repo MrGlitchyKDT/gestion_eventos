@@ -2,7 +2,7 @@
 require __DIR__ . '/panel_eventos.php';
 return;
 
-$titulo_pagina = 'Reportes y analítica — CERT-DIE';
+$titulo_pagina = 'Reportes y analítica — DIE-CERT';
 $seccion_activa = 'reportes';
 require_once __DIR__ . '/../../layouts/header.php';
 require_once __DIR__ . '/../../layouts/navbar.php';

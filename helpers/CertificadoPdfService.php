@@ -32,10 +32,10 @@ class CertificadoPdfService {
         $escalaY = $tamano['height'] / max(1, (float)($lienzo['alto'] ?? 210));
         $valores = [
             'nombre' => trim($certificado['nombres'] . ' ' . $certificado['apellidos']),
-            'ci' => 'C.I. ' . $certificado['ci'],
+            'ci' => (string)$certificado['ci'],
             'evento' => $certificado['evento_titulo'],
             'horas' => $certificado['horas_academicas'] . ' horas académicas',
-            'fechas' => 'Del ' . date('d/m/Y', strtotime($certificado['fecha_inicio'])) . ' al ' . date('d/m/Y', strtotime($certificado['fecha_fin'])),
+            'fechas' => date('d/m/Y', strtotime($certificado['fecha_inicio'])) . ' al ' . date('d/m/Y', strtotime($certificado['fecha_fin'])),
             'rol_expositor' => $certificado['rol_expositor'] ?? '',
             'codigo' => $certificado['codigo_unico'],
             'validacion' => 'Verifique: ' . ($certificado['codigo_qr'] ?? '')

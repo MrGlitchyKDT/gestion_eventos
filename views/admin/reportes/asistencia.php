@@ -1,5 +1,5 @@
 <?php
-$titulo_pagina = 'Asistencia de sesión — CERT-DIE';
+$titulo_pagina = 'Asistencia de sesión — DIE-CERT';
 $seccion_activa = 'reportes';
 require_once __DIR__ . '/../../layouts/header.php';
 require_once __DIR__ . '/../../layouts/navbar.php';

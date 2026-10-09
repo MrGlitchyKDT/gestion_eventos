@@ -1,5 +1,5 @@
 <?php 
-$titulo_pagina = "Mis Inscripciones — CERT-DIE";
+$titulo_pagina = "Mis Inscripciones — DIE-CERT";
 $seccion_activa = "mis_inscripciones";
 require_once __DIR__ . '/../layouts/header.php';
 require_once __DIR__ . '/../layouts/navbar.php'; 

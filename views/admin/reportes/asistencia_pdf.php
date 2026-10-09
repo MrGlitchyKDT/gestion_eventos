@@ -1,5 +1,5 @@
 <?php
-$titulo_pagina = 'Asistencia de sesión — CERT-DIE'; $seccion_activa = 'reportes';
+$titulo_pagina = 'Asistencia de sesión — DIE-CERT'; $seccion_activa = 'reportes';
 require_once __DIR__ . '/../../layouts/header.php'; require_once __DIR__ . '/../../layouts/navbar.php';
 $parametrosFiltro = ['mes' => $filtrosReporte['mes']];
 if ($filtrosReporte['id_categoria']) $parametrosFiltro['id_categoria'] = $filtrosReporte['id_categoria'];

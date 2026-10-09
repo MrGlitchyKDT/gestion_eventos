@@ -1,5 +1,5 @@
 <?php
-$titulo_pagina = 'Nueva contraseña — CERT-DIE';
+$titulo_pagina = 'Nueva contraseña — DIE-CERT';
 $esAuth = true;
 $esLogin = true;
 require_once __DIR__ . '/../layouts/header.php';

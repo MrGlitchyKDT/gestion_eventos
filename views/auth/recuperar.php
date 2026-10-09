@@ -1,5 +1,5 @@
 <?php
-$titulo_pagina = 'Recuperar contraseña — CERT-DIE';
+$titulo_pagina = 'Recuperar contraseña — DIE-CERT';
 $esAuth = true;
 $esLogin = true;
 require_once __DIR__ . '/../layouts/header.php';

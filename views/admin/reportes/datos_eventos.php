@@ -1,5 +1,5 @@
 <?php
-$titulo_pagina = 'Datos de eventos — CERT-DIE';
+$titulo_pagina = 'Datos de eventos — DIE-CERT';
 $seccion_activa = 'reportes';
 require_once __DIR__ . '/../../layouts/header.php';
 require_once __DIR__ . '/../../layouts/navbar.php';
@@ -18,7 +18,7 @@ $consultaDatos = http_build_query($parametrosDatos);
     <div>
       <a class="small text-decoration-none" href="index.php?action=admin_reportes&amp;<?= htmlspecialchars($consultaDatos) ?>#datos-eventos"><i class="bi bi-arrow-left me-1"></i>Volver a reportes</a>
       <h1 class="h3 fw-bold text-uab-azul mt-2 mb-1">Todos los eventos para datos</h1>
-      <p class="text-muted mb-0">Seleccione un evento para analizar el género, condición académica y rango de edad de sus inscritos.</p>
+      <p class="text-muted mb-0">Seleccione un evento para analizar el género, condición académica y edad de sus inscritos.</p>
     </div>
   </div>
 

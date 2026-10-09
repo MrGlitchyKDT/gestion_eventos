@@ -1,5 +1,5 @@
 <?php
-$titulo_pagina = 'Buzón de reimpresiones — CERT-DIE';
+$titulo_pagina = 'Buzón de reimpresiones — DIE-CERT';
 $seccion_activa = 'admin_reimpresiones';
 require_once __DIR__ . '/../../layouts/header.php';
 require_once __DIR__ . '/../../layouts/navbar.php';

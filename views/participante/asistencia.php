@@ -1,5 +1,5 @@
 <?php
-$titulo_pagina = 'Mi asistencia — CERT-DIE';
+$titulo_pagina = 'Mi asistencia — DIE-CERT';
 $seccion_activa = 'mi_asistencia';
 $escapar = static fn($valor): string => htmlspecialchars((string)$valor, ENT_QUOTES, 'UTF-8');
 require_once __DIR__ . '/../layouts/header.php';
