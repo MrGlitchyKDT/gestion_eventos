@@ -289,6 +289,11 @@ switch ($action) {
         (new ExpositorController())->exportarAsistencia();
         break;
 
+    case 'expositor_descargar_asistencia_pdf':
+        require_once __DIR__ . '/../controllers/ExpositorController.php';
+        (new ExpositorController())->descargarAsistenciaPdf();
+        break;
+
     // ==========================================
     // ADMINISTRACIÓN CENTRAL (RF-29 a RF-70)
     // ==========================================

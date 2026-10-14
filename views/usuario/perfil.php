@@ -52,7 +52,7 @@ if (!empty($u['fecha_ultimo_cambio_foto'])) {
               <span class="badge bg-white text-uab-azul px-3 py-1 rounded-pill fw-bold small">
                 <i class="bi bi-shield-check me-1"></i> Cuenta Verificada
               </span>
-              <span class="badge bg-light bg-opacity-25 text-white border border-white border-opacity-25 px-3 py-1 rounded-pill small">
+              <span class="badge bg-danger text-white border border-danger px-3 py-1 rounded-pill small">
                 <?= $rolNombre ?>
               </span>
             </div>

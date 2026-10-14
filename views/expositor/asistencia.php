@@ -34,7 +34,7 @@ require_once __DIR__ . '/../layouts/navbar.php';
     <?php else: ?>
       <div class="card border-0 shadow-sm mb-4 no-print">
         <div class="card-body p-3">
-          <div class="row g-3 align-items-end">
+          <div class="row g-3 align-items-center">
             <div class="col-md-6">
               <label for="filtro_evento" class="form-label small fw-semibold">Evento</label>
               <select id="filtro_evento" class="form-select" onchange="cambiarEvento(this.value)">
@@ -60,8 +60,14 @@ require_once __DIR__ . '/../layouts/navbar.php';
               </select>
             </div>
             <div class="col-md-2 d-grid gap-2">
-              <a class="btn btn-outline-success" href="index.php?action=expositor_exportar_asistencia&id_evento=<?= (int)$idEvento ?>"><i class="bi bi-filetype-csv me-1"></i> Exportar</a>
-              <button class="btn btn-outline-secondary" type="button" onclick="window.print()"><i class="bi bi-printer me-1"></i> Imprimir</button>
+              <?php if ($sesion): ?>
+                <a class="btn btn-outline-success" href="index.php?action=expositor_exportar_asistencia&amp;formato=csv&amp;id_evento=<?= (int)$idEvento ?>&amp;id_sesion=<?= (int)$sesion['id_sesion'] ?>"><i class="bi bi-filetype-csv me-1"></i> Exportar CSV</a>
+                <a class="btn btn-outline-success" href="index.php?action=expositor_exportar_asistencia&amp;formato=xlsx&amp;id_evento=<?= (int)$idEvento ?>&amp;id_sesion=<?= (int)$sesion['id_sesion'] ?>"><i class="bi bi-file-earmark-excel me-1"></i> Exportar Excel</a>
+                <a class="btn btn-outline-danger" href="index.php?action=expositor_descargar_asistencia_pdf&amp;id_evento=<?= (int)$idEvento ?>&amp;id_sesion=<?= (int)$sesion['id_sesion'] ?>"><i class="bi bi-filetype-pdf me-1"></i> Lista en PDF</a>
+              <?php else: ?>
+                <button class="btn btn-outline-success" type="button" disabled><i class="bi bi-file-earmark-excel me-1"></i> Exportar Excel</button>
+                <button class="btn btn-outline-danger" type="button" disabled><i class="bi bi-filetype-pdf me-1"></i> Lista en PDF</button>
+              <?php endif; ?>
             </div>
           </div>
         </div>
@@ -119,11 +125,11 @@ require_once __DIR__ . '/../layouts/navbar.php';
         <div class="table-responsive card border-0 shadow-sm">
           <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
-              <tr><th>Participante</th><th>CI</th><th class="text-center">Estado de asistencia</th><th class="text-end">Porcentaje acumulado</th></tr>
+              <tr><th>Participante</th><th>CI</th><th class="text-center">Estado de asistencia</th><th class="text-center">Observación</th><th class="text-end">Porcentaje acumulado</th></tr>
             </thead>
             <tbody>
               <?php if (empty($participantes)): ?>
-                <tr><td colspan="4" class="text-center py-4 text-muted">No hay participantes inscritos para este evento.</td></tr>
+                <tr><td colspan="5" class="text-center py-4 text-muted">No hay participantes inscritos para este evento.</td></tr>
               <?php else: ?>
                 <?php foreach ($participantes as $participante): ?>
                   <tr data-inscripcion="<?= (int)$participante['id_inscripcion'] ?>">
@@ -140,6 +146,14 @@ require_once __DIR__ . '/../layouts/navbar.php';
                         <span class="badge bg-light text-dark border"><?= $escapar($participante['estado_asistencia'] === 'SIN_REGISTRO' ? 'Pendiente' : $participante['estado_asistencia']) ?></span>
                       <?php endif; ?>
                     </td>
+                    <td class="text-center">
+                      <?php $puedeObservar = $puedeCorregir; ?>
+                      <?php if ($puedeObservar): ?>
+                        <button type="button" class="btn btn-sm btn-outline-secondary editar-observacion" data-bs-toggle="modal" data-bs-target="#modalObservacionAsistencia" data-nombre="<?= $escapar($participante['nombres'] . ' ' . $participante['apellidos']) ?>" data-observacion="<?= $escapar($participante['observacion'] ?? '') ?>" title="<?= $participante['estado_asistencia'] === 'SIN_REGISTRO' ? 'Registre primero la asistencia' : 'Agregar o editar observación' ?>" <?= $participante['estado_asistencia'] === 'SIN_REGISTRO' ? 'disabled' : '' ?>><i class="bi bi-chat-left-text me-1"></i><span data-etiqueta-observacion><?= !empty($participante['observacion']) ? 'Editar' : 'Agregar' ?></span></button>
+                      <?php else: ?>
+                        <span class="small text-muted">—</span>
+                      <?php endif; ?>
+                    </td>
                     <td class="text-end"><span class="badge bg-light text-dark border porcentaje-asistencia"><?= number_format((float)$participante['porcentaje_asistencia'], 0) ?>%</span></td>
                   </tr>
                 <?php endforeach; ?>
@@ -147,6 +161,23 @@ require_once __DIR__ . '/../layouts/navbar.php';
             </tbody>
           </table>
         </div>
+
+        <?php if ($puedeCorregir): ?>
+          <div class="modal fade" id="modalObservacionAsistencia" tabindex="-1" aria-labelledby="tituloModalObservacion" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+              <form id="formulario-observacion-asistencia">
+                <div class="modal-header bg-uab-azul text-white"><h2 class="modal-title h5" id="tituloModalObservacion"><i class="bi bi-chat-left-text me-2"></i>Observación de asistencia</h2><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+                <div class="modal-body">
+                  <p class="mb-3">Participante: <strong id="observacion-participante"></strong></p>
+                  <label class="form-label fw-semibold" for="observacion-texto">Observación <span class="text-muted fw-normal">(opcional)</span></label>
+                  <textarea class="form-control" id="observacion-texto" maxlength="1000" rows="4" placeholder="Ej. Presentó justificativo médico."></textarea>
+                  <div class="form-text">Máximo 1.000 caracteres.</div>
+                </div>
+                <div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-uab-azul" id="guardar-observacion" type="submit"><i class="bi bi-save me-1"></i>Guardar observación</button></div>
+              </form>
+            </div></div>
+          </div>
+        <?php endif; ?>
       <?php endif; ?>
     <?php endif; ?>
   </section>
@@ -169,7 +200,7 @@ document.querySelectorAll('.asistencia-opciones button').forEach((boton) => {
       const respuesta = await fetch('index.php?action=api_guardar_asistencia', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ id_sesion: idSesionActual, id_inscripcion: Number(fila.dataset.inscripcion), estado: boton.dataset.estado, csrf_token: csrfToken })
+        body: JSON.stringify({ id_sesion: idSesionActual, id_inscripcion: Number(fila.dataset.inscripcion), estado: boton.dataset.estado, observacion: fila.querySelector('.editar-observacion')?.dataset.observacion ?? null, csrf_token: csrfToken })
       });
       const datos = await respuesta.json();
       if (!respuesta.ok || !datos.success) throw new Error(datos.mensaje || 'No se pudo guardar la asistencia.');
@@ -178,6 +209,11 @@ document.querySelectorAll('.asistencia-opciones button').forEach((boton) => {
         item.className = `btn ${activo ? 'btn-uab-azul active' : 'btn-outline-secondary'}`;
       });
       fila.querySelector('.porcentaje-asistencia').textContent = `${Number(datos.porcentaje_asistencia).toFixed(0)}%`;
+      const botonObservacion = fila.querySelector('.editar-observacion');
+      if (botonObservacion) {
+        botonObservacion.disabled = false;
+        botonObservacion.title = 'Agregar o editar observación';
+      }
       document.getElementById('estado_guardado').textContent = 'Asistencia guardada.';
     } catch (error) {
       document.getElementById('estado_guardado').textContent = error.message;
@@ -186,6 +222,52 @@ document.querySelectorAll('.asistencia-opciones button').forEach((boton) => {
     }
   });
 });
+
+const modalObservacion = document.getElementById('modalObservacionAsistencia');
+let filaConObservacion = null;
+if (modalObservacion) {
+  const textoObservacion = document.getElementById('observacion-texto');
+  const participanteObservacion = document.getElementById('observacion-participante');
+  const botonGuardarObservacion = document.getElementById('guardar-observacion');
+  document.querySelectorAll('.editar-observacion').forEach((boton) => {
+    boton.addEventListener('click', () => {
+      filaConObservacion = boton.closest('tr');
+      participanteObservacion.textContent = boton.dataset.nombre || '';
+      textoObservacion.value = boton.dataset.observacion || '';
+    });
+  });
+
+  document.getElementById('formulario-observacion-asistencia').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    if (!filaConObservacion) return;
+    const estado = filaConObservacion.querySelector('.asistencia-opciones .active')?.dataset.estado;
+    if (!estado) {
+      document.getElementById('estado_guardado').textContent = 'Registre primero el estado de asistencia.';
+      return;
+    }
+    botonGuardarObservacion.disabled = true;
+    document.getElementById('estado_guardado').textContent = 'Guardando observación…';
+    try {
+      const respuesta = await fetch('index.php?action=api_guardar_asistencia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ id_sesion: idSesionActual, id_inscripcion: Number(filaConObservacion.dataset.inscripcion), estado, observacion: textoObservacion.value.trim(), csrf_token: csrfToken })
+      });
+      const datos = await respuesta.json();
+      if (!respuesta.ok || !datos.success) throw new Error(datos.mensaje || 'No se pudo guardar la observación.');
+      const boton = filaConObservacion.querySelector('.editar-observacion');
+      const observacion = textoObservacion.value.trim();
+      boton.dataset.observacion = observacion;
+      boton.querySelector('[data-etiqueta-observacion]').textContent = observacion ? 'Editar' : 'Agregar';
+      bootstrap.Modal.getInstance(modalObservacion).hide();
+      document.getElementById('estado_guardado').textContent = 'Observación guardada.';
+    } catch (error) {
+      document.getElementById('estado_guardado').textContent = error.message;
+    } finally {
+      botonGuardarObservacion.disabled = false;
+    }
+  });
+}
 </script>
 
 <style>

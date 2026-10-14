@@ -3,7 +3,7 @@
 
 class Database {
     private static string $host     = "localhost";
-    private static string $db_name  = "gestion_eventos_db";
+    private static string $db_name  = "ideas_db_die-cert";
     private static string $username = "root";
     private static string $password = "";
     private static string $charset  = "utf8mb4";

@@ -31,6 +31,10 @@ class ReportePdfService {
         $columnas = [['Participante', 59], ['CI', 28], ['Inscripción', 26], ['Asistencia', 28], ['Observación', 68], ['Registro', 40]];
         $titulo = 'Lista de asistencia por sesión';
         $subtitulo = $evento['titulo'] . ' — ' . $sesion['titulo'] . ' — ' . date('d/m/Y', strtotime($sesion['fecha']));
+        if (!empty($sesion['hora_inicio']) && !empty($sesion['hora_fin'])) {
+            $subtitulo .= ' · ' . substr((string)$sesion['hora_inicio'], 0, 5) . '–' . substr((string)$sesion['hora_fin'], 0, 5);
+        }
+        if (!empty($sesion['lugar_especifico'])) $subtitulo .= ' · ' . $sesion['lugar_especifico'];
         $pdf->AddPage();
         $this->encabezado($pdf, $titulo, $subtitulo, $columnas);
         foreach ($filas as $fila) {

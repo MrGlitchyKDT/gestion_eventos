@@ -177,6 +177,12 @@ class ExpositorController {
         $estado         = strtoupper(trim($input['estado'] ?? ''));
         $observacion    = !empty($input['observacion']) ? trim($input['observacion']) : null;
 
+        if ($observacion !== null && mb_strlen($observacion) > 1000) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'mensaje' => 'La observación no puede superar 1.000 caracteres.']);
+            exit();
+        }
+
         if (!AuthHelper::validarCsrf($input['csrf_token'] ?? null)) {
             http_response_code(419);
             echo json_encode(['success' => false, 'mensaje' => 'La sesión de seguridad expiró. Recargue la página.']);
@@ -278,33 +284,76 @@ class ExpositorController {
         header('Location: index.php?action=expositor_asistencia&id_evento=' . $evento . '&id_sesion=' . (int)$idSesion); exit();
     }
 
-    /** Exporta el informe de asistencia del evento seleccionado a CSV. */
+    /** Exporta la lista de asistencia de la sesión seleccionada a CSV o Excel. */
     public function exportarAsistencia(): void {
         AuthHelper::requerirRol(['EXPOSITOR', 'ADMINISTRADOR']);
-        $usuario = AuthHelper::obtenerUsuario();
-        $idEvento = filter_input(INPUT_GET, 'id_evento', FILTER_VALIDATE_INT);
-        $idsPermitidos = array_map('intval', array_column($this->eventosAutorizados($usuario), 'id_evento'));
-        if (!$idEvento || !in_array($idEvento, $idsPermitidos, true)) {
-            http_response_code(403);
-            exit('No tiene permiso para exportar este informe.');
+        [$usuario, $evento, $sesion, $participantes] = $this->datosExportacionAsistencia();
+        $formato = strtolower(trim((string)($_GET['formato'] ?? 'csv')));
+        $encabezados = ['Sesión', 'Fecha', 'Hora inicio', 'Hora fin', 'Estado de sesión', 'Código inscripción', 'Participante', 'CI', 'Estado de asistencia', 'Observación', '% acumulado'];
+        $filas = array_map(static fn(array $fila): array => [
+            $sesion['titulo'],
+            $sesion['fecha'],
+            substr((string)$sesion['hora_inicio'], 0, 5),
+            substr((string)$sesion['hora_fin'], 0, 5),
+            $sesion['estado'],
+            $fila['codigo_inscripcion'],
+            trim($fila['nombres'] . ' ' . $fila['apellidos']),
+            $fila['ci'],
+            $fila['estado_asistencia'] === 'SIN_REGISTRO' ? 'Pendiente' : $fila['estado_asistencia'],
+            $fila['observacion'] ?: '—',
+            $fila['porcentaje_asistencia'] . '%',
+        ], $participantes);
+
+        $accionAuditoria = $formato === 'xlsx' ? 'EXPORTAR_ASISTENCIA_EXCEL' : 'EXPORTAR_ASISTENCIA_CSV';
+        Auditoria::registrar((int)$usuario['id_usuario'], $accionAuditoria, 'ASISTENCIAS', "Lista de asistencia de la sesión #{$sesion['id_sesion']} exportada.");
+        if ($formato === 'xlsx') {
+            require_once __DIR__ . '/../helpers/ReporteExcelService.php';
+            ReporteExcelService::descargar('asistencia_sesion_' . (int)$sesion['id_sesion'], 'Asistencia', $encabezados, $filas);
         }
 
-        $evento = $this->eventoModel->obtenerDetalle($idEvento);
-        $archivo = 'asistencia_' . preg_replace('/[^a-z0-9_-]/i', '_', $evento['codigo'] ?? (string)$idEvento) . '_' . date('Ymd_His') . '.csv';
+        $archivo = 'asistencia_sesion_' . preg_replace('/[^a-z0-9_-]/i', '_', $evento['codigo'] ?? (string)$evento['id_evento']) . '_' . (int)$sesion['id_sesion'] . '_' . date('Ymd_His') . '.csv';
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . $archivo . '"');
         echo "\xEF\xBB\xBF";
         $salida = fopen('php://output', 'w');
-        fputcsv($salida, ['Sesión', 'Fecha', 'Horario', 'CI', 'Participante', 'Correo', 'Estado', 'Observación', '% acumulado']);
-        foreach ($this->asistenciaModel->listarInformePorEvento($idEvento) as $fila) {
-            fputcsv($salida, [
-                $fila['sesion_titulo'], $fila['fecha'], substr($fila['hora_inicio'], 0, 5) . ' - ' . substr($fila['hora_fin'], 0, 5),
-                $fila['ci'], trim($fila['nombres'] . ' ' . $fila['apellidos']), $fila['correo'],
-                $fila['estado_asistencia'], $fila['observacion'], $fila['porcentaje_asistencia'] . '%'
-            ]);
-        }
+        fputcsv($salida, $encabezados);
+        foreach ($filas as $fila) fputcsv($salida, $fila);
         fclose($salida);
         exit();
+    }
+
+    /** Descarga en PDF la lista de la sesión seleccionada por el expositor autorizado. */
+    public function descargarAsistenciaPdf(): void {
+        AuthHelper::requerirRol(['EXPOSITOR', 'ADMINISTRADOR']);
+        [$usuario, $evento, $sesion, $participantes] = $this->datosExportacionAsistencia();
+        $filas = array_map(static fn(array $fila): array => $fila + ['estado_inscripcion' => 'INSCRITO'], $participantes);
+        Auditoria::registrar((int)$usuario['id_usuario'], 'EXPORTAR_ASISTENCIA_PDF', 'ASISTENCIAS', "Lista de asistencia de la sesión #{$sesion['id_sesion']} descargada en PDF.");
+        require_once __DIR__ . '/../helpers/ReportePdfService.php';
+        (new ReportePdfService())->descargarAsistencia($evento, $sesion, $filas);
+    }
+
+    /** Verifica la asignación del expositor y obtiene los datos de la sesión solicitada. */
+    private function datosExportacionAsistencia(): array {
+        $usuario = AuthHelper::obtenerUsuario();
+        $idEvento = filter_input(INPUT_GET, 'id_evento', FILTER_VALIDATE_INT);
+        $idSesion = filter_input(INPUT_GET, 'id_sesion', FILTER_VALIDATE_INT);
+        $idsPermitidos = array_map('intval', array_column($this->eventosAutorizados($usuario), 'id_evento'));
+        if (!$idEvento || !$idSesion || !in_array($idEvento, $idsPermitidos, true)) {
+            http_response_code(403);
+            exit('No tiene permiso para descargar esta lista de asistencia.');
+        }
+
+        $sesion = $this->sesionModel->obtenerPorId($idSesion);
+        if (!$sesion || (int)$sesion['id_evento'] !== $idEvento) {
+            http_response_code(404);
+            exit('La sesión solicitada no pertenece al evento seleccionado.');
+        }
+        $evento = $this->eventoModel->obtenerDetalle($idEvento);
+        if (!$evento) {
+            http_response_code(404);
+            exit('El evento solicitado no existe.');
+        }
+        return [$usuario, $evento, $sesion, $this->asistenciaModel->listarPorSesion($idSesion, $idEvento)];
     }
 
     private function eventosAutorizados(array $usuario): array {

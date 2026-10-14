@@ -21,7 +21,6 @@ final class ReporteExcelService {
                 '_rels/.rels' => self::relacionesRaiz(),
                 'xl/workbook.xml' => self::libro($nombreHoja),
                 'xl/_rels/workbook.xml.rels' => self::relacionesLibro(),
-                'xl/styles.xml' => self::estilos(),
                 'xl/worksheets/sheet1.xml' => self::hoja($encabezados, $filas),
             ];
 
@@ -60,7 +59,7 @@ final class ReporteExcelService {
     }
 
     private static function hoja(array $encabezados, array $filas): string {
-        $filasExcel = [self::fila(1, $encabezados, true)];
+        $filasExcel = [self::fila(1, $encabezados)];
         $anchos = array_map(static fn($valor): int => min(45, max(12, mb_strlen((string)$valor) + 3)), $encabezados);
 
         foreach ($filas as $indice => $fila) {
@@ -78,20 +77,23 @@ final class ReporteExcelService {
             $columnas .= '<col min="' . $columna . '" max="' . $columna . '" width="' . $ancho . '" customWidth="1"/>';
         }
 
+        $ultimaColumna = self::letraColumna(max(1, count($encabezados)));
+        $ultimaFila = max(1, count($filas) + 1);
+        $rango = 'A1:' . $ultimaColumna . $ultimaFila;
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            . '<dimension ref="' . $rango . '"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/>'
             . '<cols>' . $columnas . '</cols><sheetData>' . implode('', $filasExcel) . '</sheetData>'
-            . '<autoFilter ref="A1:' . self::letraColumna(max(1, count($encabezados))) . '1"/>'
+            . '<autoFilter ref="' . $rango . '"/>'
             . '</worksheet>';
     }
 
-    private static function fila(int $numero, array $valores, bool $encabezado = false): string {
+    private static function fila(int $numero, array $valores): string {
         $celdas = '';
         foreach ($valores as $indice => $valor) {
             $referencia = self::letraColumna($indice + 1) . $numero;
             $texto = self::textoSeguro($valor);
-            $estilo = $encabezado ? ' s="1"' : '';
-            $celdas .= '<c r="' . $referencia . '" t="inlineStr"' . $estilo . '><is><t xml:space="preserve">' . $texto . '</t></is></c>';
+            $celdas .= '<c r="' . $referencia . '" t="inlineStr"><is><t xml:space="preserve">' . $texto . '</t></is></c>';
         }
         return '<row r="' . $numero . '">' . $celdas . '</row>';
     }
@@ -100,6 +102,9 @@ final class ReporteExcelService {
         $texto = trim((string)$valor);
         // Evita que Excel interprete datos recibidos como fórmulas.
         if ($texto !== '' && in_array($texto[0], ['=', '+', '-', '@'], true)) $texto = "'" . $texto;
+        // XML 1.0 no admite caracteres de control, que hacen que Excel intente
+        // reparar el libro cuando provienen de campos de texto libres.
+        $texto = preg_replace('/[^\x{9}\x{A}\x{D}\x{20}-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u', '', $texto) ?? '';
         return htmlspecialchars($texto, ENT_XML1 | ENT_QUOTES, 'UTF-8');
     }
 
@@ -120,7 +125,6 @@ final class ReporteExcelService {
             . '<Default Extension="xml" ContentType="application/xml"/>'
             . '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
             . '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-            . '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
             . '</Types>';
     }
 
@@ -135,25 +139,14 @@ final class ReporteExcelService {
         $nombreSeguro = htmlspecialchars(mb_substr($nombreHoja, 0, 31), ENT_XML1 | ENT_QUOTES, 'UTF-8');
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             . '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-            . '<sheets><sheet name="' . $nombreSeguro . '" sheetId="1" r:id="rId1"/></sheets></workbook>';
+            . '<workbookPr/><bookViews><workbookView workbookViewId="0"/></bookViews>'
+            . '<sheets><sheet name="' . $nombreSeguro . '" sheetId="1" r:id="rId1"/></sheets><calcPr calcId="0"/></workbook>';
     }
 
     private static function relacionesLibro(): string {
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
             . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-            . '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
             . '</Relationships>';
-    }
-
-    private static function estilos(): string {
-        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            . '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            . '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts>'
-            . '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1A428A"/><bgColor indexed="64"/></patternFill></fill></fills>'
-            . '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
-            . '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-            . '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" applyFont="1" applyFill="1"/></cellXfs>'
-            . '</styleSheet>';
     }
 }

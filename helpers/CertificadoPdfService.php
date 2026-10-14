@@ -30,12 +30,15 @@ class CertificadoPdfService {
         $lienzo = $config['_lienzo'] ?? ['ancho' => 297, 'alto' => 210];
         $escalaX = $tamano['width'] / max(1, (float)($lienzo['ancho'] ?? 297));
         $escalaY = $tamano['height'] / max(1, (float)($lienzo['alto'] ?? 210));
+        $fechaInicio = date('d/m/Y', strtotime($certificado['fecha_inicio']));
+        $fechaFin = date('d/m/Y', strtotime($certificado['fecha_fin']));
+        $textoFechas = $fechaInicio === $fechaFin ? $fechaInicio : $fechaInicio . ' al ' . $fechaFin;
         $valores = [
             'nombre' => trim($certificado['nombres'] . ' ' . $certificado['apellidos']),
             'ci' => (string)$certificado['ci'],
             'evento' => $certificado['evento_titulo'],
             'horas' => $certificado['horas_academicas'] . ' horas académicas',
-            'fechas' => date('d/m/Y', strtotime($certificado['fecha_inicio'])) . ' al ' . date('d/m/Y', strtotime($certificado['fecha_fin'])),
+            'fechas' => $textoFechas,
             'rol_expositor' => $certificado['rol_expositor'] ?? '',
             'codigo' => $certificado['codigo_unico'],
             'validacion' => 'Verifique: ' . ($certificado['codigo_qr'] ?? '')
